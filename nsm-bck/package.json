@@ -1,0 +1,36 @@
+{
+  "name": "nsm-bck",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --watch src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "generate": "drizzle-kit generate",
+    "push": "drizzle-kit push:pg",
+    "studio": "drizzle-kit studio",
+    "migrate": "node src/migrations/run.js",
+    "push-db": "node src/migrations/push.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "Backend for NEPSE Market App with portfolio management",
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0",
+    "@supabase/supabase-js": "^2.38.4",
+    "axios": "^1.6.2",
+    "bcrypt": "^5.1.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "drizzle-orm": "^0.43.1",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "jsonwebtoken": "^9.0.2",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.1",
+    "nodemon": "^3.0.1"
+  }
+}
