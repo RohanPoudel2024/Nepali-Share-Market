@@ -117,11 +117,10 @@ const paperTradingService = {
 
   // Execute a trade
   executeTrade: async (portfolioId, tradeData) => {
-    // Start a transaction
+    const { symbol, type, quantity, price, companyName } = tradeData;
+    
     return await db.transaction(async (tx) => {
       try {
-        console.log('Executing trade with data:', { portfolioId, ...tradeData });
-        
         // Get portfolio
         const portfolio = await tx.query.paperPortfolios.findFirst({
           where: eq(paperPortfolios.id, portfolioId)
@@ -131,23 +130,15 @@ const paperTradingService = {
           throw new Error('Portfolio not found');
         }
         
-        const { symbol, type, quantity, price } = tradeData;
+        // Calculate amount
+        const totalAmount = parseFloat(quantity) * parseFloat(price);
+        console.log(`Calculating trade: ${type} ${quantity} ${symbol} at ${price} = ${totalAmount}`);
         
-        // Make sure quantity and price are valid numbers
-        const safeQuantity = parseFloat(quantity);
-        const safePrice = parseFloat(price);
+        // Track balance changes for debugging
+        let oldBalance = parseFloat(portfolio.current_balance);
+        let newBalance = oldBalance;
         
-        if (isNaN(safeQuantity) || safeQuantity <= 0) {
-          throw new Error('Invalid quantity value');
-        }
-        
-        if (isNaN(safePrice) || safePrice <= 0) {
-          throw new Error('Invalid price value');
-        }
-        
-        const totalAmount = safeQuantity * safePrice;
-        
-        // Continue with the rest of the trade execution logic
+        // Handle buy/sell logic
         if (type.toUpperCase() === 'BUY') {
           // Check if user has enough balance
           if (parseFloat(portfolio.current_balance) < totalAmount) {
@@ -155,14 +146,18 @@ const paperTradingService = {
           }
 
           // Update balance - CRITICAL PART
-          console.log('Updating portfolio balance from', portfolio.current_balance, 'to', parseFloat(portfolio.current_balance) - totalAmount);
+          newBalance = oldBalance - totalAmount;
+          console.log(`BUYING: Updating portfolio balance from ${oldBalance} to ${newBalance}`);
           
+          // Make sure we use the exact calculated value
           await tx.update(paperPortfolios)
             .set({ 
-              current_balance: parseFloat(portfolio.current_balance) - totalAmount,
+              current_balance: newBalance,
               updated_at: new Date()
             })
             .where(eq(paperPortfolios.id, portfolioId));
+            
+          console.log(`Balance updated successfully for BUY: ${oldBalance} -> ${newBalance}`);
           
           // Check if holding exists
           const existingHolding = await tx.query.paperHoldings.findFirst({
@@ -176,7 +171,7 @@ const paperTradingService = {
             // Update existing holding
             console.log('Updating existing holding:', existingHolding);
             
-            const newQuantity = parseFloat(existingHolding.quantity) + safeQuantity;
+            const newQuantity = parseFloat(existingHolding.quantity) + parseFloat(quantity);
             const newAvgPrice = ((parseFloat(existingHolding.quantity) * parseFloat(existingHolding.average_buy_price)) + totalAmount) / newQuantity;
             
             await tx.update(paperHoldings)
@@ -193,37 +188,85 @@ const paperTradingService = {
             await tx.insert(paperHoldings).values({
               portfolio_id: portfolioId,
               symbol,
-              company_name: tradeData.companyName || symbol,
-              quantity: safeQuantity,
-              average_buy_price: safePrice,
-              buy_price: safePrice,
+              company_name: companyName || symbol,
+              quantity: parseFloat(quantity),
+              average_buy_price: parseFloat(price),
+              buy_price: parseFloat(price),
               is_active: true,
               created_at: new Date(),
               updated_at: new Date()
             });
           }
-        } 
-        else if (type.toUpperCase() === 'SELL') {
-          // Rest of the sell logic...
-        } 
-        else {
+        } else if (type.toUpperCase() === 'SELL') {
+          // Check if holding exists and has enough quantity
+          const existingHolding = await tx.query.paperHoldings.findFirst({
+            where: and(
+              eq(paperHoldings.portfolio_id, portfolioId),
+              eq(paperHoldings.symbol, symbol)
+            )
+          });
+
+          if (!existingHolding) {
+            throw new Error(`You don't own any shares of ${symbol}`);
+          }
+
+          if (parseFloat(existingHolding.quantity) < parseFloat(quantity)) {
+            throw new Error(`Insufficient shares. You only have ${existingHolding.quantity} shares of ${symbol}`);
+          }
+
+          // Update balance for sell - add funds
+          newBalance = oldBalance + totalAmount;
+          console.log(`SELLING: Updating portfolio balance from ${oldBalance} to ${newBalance}`);
+          
+          await tx.update(paperPortfolios)
+            .set({ 
+              current_balance: newBalance,
+              updated_at: new Date()
+            })
+            .where(eq(paperPortfolios.id, portfolioId));
+            
+          console.log(`Balance updated successfully for SELL: ${oldBalance} -> ${newBalance}`);
+          
+          // Update holding quantity
+          const newQuantity = parseFloat(existingHolding.quantity) - parseFloat(quantity);
+          
+          if (newQuantity > 0) {
+            // Update holding with reduced quantity
+            await tx.update(paperHoldings)
+              .set({ 
+                quantity: newQuantity,
+                updated_at: new Date()
+              })
+              .where(eq(paperHoldings.id, existingHolding.id));
+          } else {
+            // Remove holding if completely sold
+            await tx.update(paperHoldings)
+              .set({ 
+                is_active: false,
+                quantity: 0,
+                updated_at: new Date()
+              })
+              .where(eq(paperHoldings.id, existingHolding.id));
+          }
+        } else {
           throw new Error('Invalid trade type. Must be BUY or SELL');
         }
 
-        // Record the trade
-        const tradeResult = await tx.insert(paperTrades).values({
+        // Record the trade regardless of buy/sell
+        const newTrade = await tx.insert(paperTrades).values({
           portfolio_id: portfolioId,
-          symbol,
+          symbol: symbol,
           type: type.toUpperCase(),
-          quantity: safeQuantity,
-          price: safePrice,
+          quantity: parseFloat(quantity),
+          price: parseFloat(price),
           total_amount: totalAmount,
-          trade_date: new Date()
+          trade_date: new Date(),
+          created_at: new Date()
         }).returning();
 
-        return tradeResult[0];
+        return newTrade[0];
       } catch (error) {
-        console.error('Error executing trade transaction:', error);
+        console.error('Transaction error:', error);
         throw error;
       }
     });
@@ -232,10 +275,14 @@ const paperTradingService = {
   // Get trade history for a portfolio
   getTradeHistory: async (portfolioId) => {
     try {
-      return await db.query.paperTrades.findMany({
+      // Fix the SQL syntax error with the ORDER BY clause
+      const trades = await db.query.paperTrades.findMany({
         where: eq(paperTrades.portfolio_id, portfolioId),
-        orderBy: (paperTrades, { asc }) => [asc(paperTrades.trade_date)]
+        orderBy: (trades, { desc }) => [desc(trades.created_at)]
+        // Removed problematic raw SQL with "asc" that was causing the syntax error
       });
+      
+      return trades;
     } catch (error) {
       console.error('Error fetching trade history:', error);
       throw error;

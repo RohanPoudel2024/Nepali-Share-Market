@@ -194,9 +194,6 @@ class PaperTradingProvider extends ChangeNotifier {
         throw Exception('Invalid stock price');
       }
       
-      // Cache the portfolio before trade to compare balances after
-      final oldBalance = _selectedPaperPortfolio?.currentBalance ?? 0;
-      
       // Execute the trade
       final success = await _paperTradingService.executePaperTrade(
         portfolioId,
@@ -210,40 +207,22 @@ class PaperTradingProvider extends ChangeNotifier {
         throw Exception('Failed to execute paper trade');
       }
       
-      // Important - reload complete portfolio data to refresh holdings and balance
-      await loadPaperPortfolioDetails(portfolioId);
+      // Important - completely reload portfolio to get fresh balance
+      print('Trade executed successfully, reloading portfolio data');
+      await _paperTradingService.getPaperPortfolioDetails(portfolioId)
+          .then((refreshedPortfolio) {
+            _selectedPaperPortfolio = refreshedPortfolio;
+            print('Updated portfolio balance: ${refreshedPortfolio.currentBalance}');
+          });
       
-      // Also reload the trade history separately to ensure it's updated
+      // Reload trade history
       try {
         _paperTrades = await _paperTradingService.getPaperTradeHistory(portfolioId);
-        notifyListeners(); // Make sure UI updates with new trades
+        print('Loaded ${_paperTrades.length} trades after execution');
       } catch (tradeHistoryError) {
         print('Warning: Trade executed but could not refresh trade history: $tradeHistoryError');
-        // Create a simple temporary trade record to show in UI while history loads
-        final tempTrade = PaperTrade(
-          id: DateTime.now().millisecondsSinceEpoch,
-          portfolioId: portfolioId,
-          symbol: symbol,
-          type: type.toUpperCase(),
-          quantity: quantity,
-          price: actualPrice,
-          totalAmount: quantity * actualPrice,
-          tradeDate: DateTime.now(),
-          createdAt: DateTime.now(),
-          timestamp: DateTime.now(),
-        );
-        
-        // Add temporary trade to list
-        if (_paperTrades == null) {
-          _paperTrades = [tempTrade];
-        } else {
-          _paperTrades = [tempTrade, ..._paperTrades];
-        }
+        _paperTrades = [];
       }
-      
-      // Log the balance changes for debugging
-      final newBalance = _selectedPaperPortfolio?.currentBalance ?? 0;
-      print('Portfolio balance change: $oldBalance -> $newBalance (${newBalance - oldBalance})');
       
       _isLoading = false;
       notifyListeners();

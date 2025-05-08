@@ -198,27 +198,25 @@ class PaperTradingService {
       
       if (response.statusCode == 200 && response.data['success'] == true) {
         if (response.data['data'] == null) {
+          print('Received null data for trade history');
           return [];
         }
         
-        final List<PaperTrade> trades = (response.data['data'] as List)
+        final tradeData = response.data['data'] as List;
+        print('Received ${tradeData.length} trades from server');
+        
+        final List<PaperTrade> trades = tradeData
             .map((item) => PaperTrade.fromJson(item))
             .toList();
         
         return trades;
       }
       
-      // If we get a 403 permission error, return an empty list instead of throwing
-      if (response.statusCode == 403) {
-        print('Permission issue when loading trade history: ${response.data['message']}');
-        return []; // Return empty list instead of throwing
-      }
-      
-      throw Exception('Failed to load trade history');
+      print('Unexpected response format from server: ${response.data}');
+      return []; // Return empty list on unexpected response
     } catch (e) {
       print('Error fetching paper trade history: $e');
-      
-      // Return empty list on error instead of throwing
+      // Return empty list on error
       return [];
     }
   }
