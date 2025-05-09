@@ -7,8 +7,8 @@ const paperPortfolios = pgTable('paper_portfolios', {
   user_id: integer('user_id'), // Made nullable
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
-  initial_balance: numeric('initial_balance').notNull().default('150000'),
-  current_balance: numeric('current_balance').notNull().default('150000'),
+  initial_balance: numeric('initial_balance').notNull().default(150000),
+  current_balance: numeric('current_balance').notNull().default(150000),
   created_at: timestamp('created_at').defaultNow(),
   updated_at: timestamp('updated_at').defaultNow()
 });

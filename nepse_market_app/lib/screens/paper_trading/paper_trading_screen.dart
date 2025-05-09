@@ -497,7 +497,7 @@ class _PaperTradingScreenState extends State<PaperTradingScreen> with SingleTick
                       children: [
                         Expanded(
                           child: _buildValueTile(
-                            'Total Value',
+                            'Total Portfolio Value',
                             'Rs. ${formatter.format(portfolio.portfolioValue)}',
                             null,
                           ),
@@ -516,8 +516,8 @@ class _PaperTradingScreenState extends State<PaperTradingScreen> with SingleTick
                       children: [
                         Expanded(
                           child: _buildValueTile(
-                            'Invested',
-                            'Rs. ${formatter.format(portfolio.totalInvestment)}',
+                            'Holdings Value',
+                            'Rs. ${formatter.format(portfolio.totalMarketValue)}',
                             null,
                           ),
                         ),

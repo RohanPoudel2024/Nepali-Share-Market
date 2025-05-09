@@ -8,8 +8,9 @@ class PaperPortfolio {
   double currentBalance;
   List<PaperHolding> holdings;
   double _totalMarketValue = 0.0;
-  double _totalInvestment = 0.0;
+  double _totalInvestment = 0.0; // Current investment value (qty × avg price)
   double _totalProfit = 0.0;
+  double _cumulativePurchases = 0.0; // Total money spent on buys
   List<PaperTrade> _paperTrades = [];
 
   PaperPortfolio({
@@ -32,18 +33,119 @@ class PaperPortfolio {
     _totalInvestment = value;
   }
 
+  double get cumulativePurchases => _cumulativePurchases;
+  set cumulativePurchases(double value) {
+    _cumulativePurchases = value;
+  }
+  
   double get totalProfit => _totalProfit;
   set totalProfit(double value) {
     _totalProfit = value;
   }
 
-  double get portfolioValue => currentBalance + totalMarketValue;
+  double get portfolioValue {
+    return currentBalance + totalMarketValue;
+  }
 
   double get totalInvested => totalInvestment;
+
+  double get totalSpent => cumulativePurchases;
 
   double get profitPercentage {
     if (totalInvestment <= 0) return 0.0;
     return (totalProfit / totalInvestment) * 100;
+  }
+
+  double get returnOnInvestment {
+    if (cumulativePurchases <= 0) return 0.0;
+
+    double portfolioGain = portfolioValue - initialBalance;
+    return (portfolioGain / cumulativePurchases) * 100;
+  }
+
+  bool canExecuteTrade(String type, double quantity, double price) {
+    if (type.toUpperCase() == 'BUY' || type.toUpperCase() == 'buy') {
+      final tradeAmount = quantity * price;
+      return currentBalance >= tradeAmount;
+    }
+    return true;
+  }
+
+  double calculateTradeAmount(double quantity, double price) {
+    return quantity * price;
+  }
+
+  void simulateTrade(String type, String symbol, double quantity, double price) {
+    final tradeAmount = calculateTradeAmount(quantity, price);
+
+    if (type.toUpperCase() == 'BUY' || type.toUpperCase() == 'buy') {
+      currentBalance -= tradeAmount;
+      _cumulativePurchases += tradeAmount;
+
+      final existingHoldingIndex = holdings.indexWhere((h) => h.symbol == symbol);
+
+      if (existingHoldingIndex >= 0) {
+        final existingHolding = holdings[existingHoldingIndex];
+        final newQuantity = existingHolding.quantity + quantity;
+        final newAvgPrice = ((existingHolding.quantity * existingHolding.averageBuyPrice) + (quantity * price)) / newQuantity;
+
+        holdings[existingHoldingIndex] = PaperHolding(
+          id: existingHolding.id,
+          symbol: symbol,
+          companyName: existingHolding.companyName,
+          quantity: newQuantity,
+          averageBuyPrice: newAvgPrice,
+          buyPrice: existingHolding.buyPrice,
+          currentPrice: existingHolding.currentPrice,
+        );
+      } else {
+        holdings.add(PaperHolding(
+          id: DateTime.now().millisecondsSinceEpoch,
+          symbol: symbol,
+          quantity: quantity,
+          averageBuyPrice: price,
+          buyPrice: price,
+        ));
+      }
+    } else if (type.toUpperCase() == 'SELL' || type.toUpperCase() == 'sell') {
+      currentBalance += tradeAmount;
+
+      final existingHoldingIndex = holdings.indexWhere((h) => h.symbol == symbol);
+
+      if (existingHoldingIndex >= 0) {
+        final existingHolding = holdings[existingHoldingIndex];
+        final newQuantity = existingHolding.quantity - quantity;
+
+        if (newQuantity <= 0) {
+          holdings.removeAt(existingHoldingIndex);
+        } else {
+          holdings[existingHoldingIndex] = PaperHolding(
+            id: existingHolding.id,
+            symbol: symbol,
+            companyName: existingHolding.companyName,
+            quantity: newQuantity,
+            averageBuyPrice: existingHolding.averageBuyPrice,
+            buyPrice: existingHolding.buyPrice,
+            currentPrice: existingHolding.currentPrice,
+          );
+        }
+      }
+    }
+
+    final newTrade = PaperTrade(
+      id: DateTime.now().millisecondsSinceEpoch,
+      portfolioId: id,
+      symbol: symbol,
+      type: type.toUpperCase(),
+      quantity: quantity,
+      price: price,
+      totalAmount: tradeAmount,
+      tradeDate: DateTime.now(),
+      createdAt: DateTime.now(),
+      timestamp: DateTime.now(),
+    );
+
+    paperTrades.add(newTrade);
   }
 
   List<PaperTrade> get paperTrades => _paperTrades;
@@ -53,7 +155,6 @@ class PaperPortfolio {
 
   factory PaperPortfolio.fromJson(Map<String, dynamic> json) {
     try {
-      // Extract ID safely - handle both numeric and string values
       int id;
       if (json['id'] is int) {
         id = json['id'];
@@ -63,15 +164,12 @@ class PaperPortfolio {
         id = 0;
       }
 
-      // Extract other fields safely
       final name = json['name'] as String? ?? "Unnamed Portfolio";
       final description = json['description'] as String?;
-      
-      // Parse numeric fields safely - handle both camelCase and snake_case keys
+
       final initialBalance = _parseDouble(json['initial_balance'] ?? json['initialBalance'] ?? 150000.0);
       final currentBalance = _parseDouble(json['current_balance'] ?? json['currentBalance'] ?? initialBalance);
-      
-      // Parse holdings safely
+
       List<PaperHolding> holdingsList = [];
       if (json['holdings'] != null) {
         try {
@@ -88,8 +186,7 @@ class PaperPortfolio {
           print('Error parsing holdings: $e');
         }
       }
-      
-      // Parse trades safely
+
       List<PaperTrade> tradesList = [];
       if (json['trades'] != null) {
         try {
@@ -111,7 +208,9 @@ class PaperPortfolio {
           print('Error parsing trades: $e');
         }
       }
-      
+
+      final cumulativePurchases = _parseDouble(json['cumulative_purchases'] ?? json['cumulativePurchases'] ?? 0.0);
+
       return PaperPortfolio(
         id: id,
         name: name,
@@ -120,10 +219,9 @@ class PaperPortfolio {
         currentBalance: currentBalance,
         holdings: holdingsList,
         paperTrades: tradesList,
-      );
+      )..cumulativePurchases = cumulativePurchases;
     } catch (e) {
       print('Error in PaperPortfolio.fromJson: $e');
-      // Return a default portfolio instead of throwing
       return PaperPortfolio(
         id: 1,
         name: "Error Portfolio",
@@ -161,6 +259,7 @@ class PaperPortfolio {
       'total_market_value': _totalMarketValue,
       'total_investment': _totalInvestment,
       'total_profit': _totalProfit,
+      'cumulative_purchases': _cumulativePurchases,
     };
   }
 }

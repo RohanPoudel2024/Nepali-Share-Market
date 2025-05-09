@@ -165,7 +165,7 @@ class PaperTradingProvider extends ChangeNotifier {
     return false; // Disabled function - we only use the default portfolio
   }
   
-  // Execute a paper trade
+  // Execute a paper trade with improved balance handling
   Future<bool> executePaperTrade(
     int portfolioId,
     String symbol,
@@ -178,6 +178,25 @@ class PaperTradingProvider extends ChangeNotifier {
     notifyListeners();
     
     try {
+      // Validate the trade locally first for quick feedback
+      if (_selectedPaperPortfolio != null && 
+          type.toUpperCase() == 'BUY' && 
+          _selectedPaperPortfolio!.id == portfolioId) {
+        
+        final actualPrice = price ?? _marketProvider.getStockPrice(symbol) ?? 0;
+        if (actualPrice <= 0) {
+          throw Exception('Invalid stock price');
+        }
+        
+        // Calculate trade amount
+        final tradeAmount = quantity * actualPrice;
+        
+        // Check if there's enough cash balance
+        if (_selectedPaperPortfolio!.currentBalance < tradeAmount) {
+          throw Exception('Insufficient balance. You need Rs. ${tradeAmount.toStringAsFixed(2)} but have Rs. ${_selectedPaperPortfolio!.currentBalance.toStringAsFixed(2)}');
+        }
+      }
+      
       double actualPrice;
       
       if (price != null) {
@@ -190,11 +209,7 @@ class PaperTradingProvider extends ChangeNotifier {
         actualPrice = marketPrice;
       }
       
-      if (actualPrice <= 0) {
-        throw Exception('Invalid stock price');
-      }
-      
-      // Execute the trade
+      // Execute the trade on the server
       final success = await _paperTradingService.executePaperTrade(
         portfolioId,
         symbol,
@@ -207,22 +222,13 @@ class PaperTradingProvider extends ChangeNotifier {
         throw Exception('Failed to execute paper trade');
       }
       
-      // Important - completely reload portfolio to get fresh balance
-      print('Trade executed successfully, reloading portfolio data');
-      await _paperTradingService.getPaperPortfolioDetails(portfolioId)
-          .then((refreshedPortfolio) {
-            _selectedPaperPortfolio = refreshedPortfolio;
-            print('Updated portfolio balance: ${refreshedPortfolio.currentBalance}');
-          });
-      
-      // Reload trade history
-      try {
-        _paperTrades = await _paperTradingService.getPaperTradeHistory(portfolioId);
-        print('Loaded ${_paperTrades.length} trades after execution');
-      } catch (tradeHistoryError) {
-        print('Warning: Trade executed but could not refresh trade history: $tradeHistoryError');
-        _paperTrades = [];
+      // Optional: Simulate trade locally for immediate UI feedback
+      if (_selectedPaperPortfolio != null && _selectedPaperPortfolio!.id == portfolioId) {
+        _selectedPaperPortfolio!.simulateTrade(type, symbol, quantity, actualPrice);
       }
+      
+      // Reload complete portfolio data to get accurate state
+      await _loadPaperPortfolioDetailsInternal(portfolioId);
       
       _isLoading = false;
       notifyListeners();
@@ -238,19 +244,14 @@ class PaperTradingProvider extends ChangeNotifier {
   
   // Update portfolio with current market prices
   void _updatePortfolioMarketPrices(PaperPortfolio portfolio) {
-    if (portfolio.holdings.isEmpty) {
-      portfolio.totalMarketValue = 0.0;
-      portfolio.totalInvestment = 0.0;
-      portfolio.totalProfit = 0.0;
-      return;
-    }
-
     double totalMarketValue = 0.0;
     double totalInvestment = 0.0;
 
+    // Calculate current investment value from holdings
     for (var holding in portfolio.holdings) {
-      // Calculate total investment
-      totalInvestment += holding.quantity * holding.buyPrice;
+      // Calculate investment value (quantity × average buy price)
+      final investmentValue = holding.quantity * holding.averageBuyPrice;
+      totalInvestment += investmentValue;
       
       try {
         // Try to get current market price
@@ -263,15 +264,15 @@ class PaperTradingProvider extends ChangeNotifier {
           // Add to total market value
           totalMarketValue += holding.marketValue;
         } else {
-          holding.currentPrice = holding.buyPrice;
-          holding.marketValue = holding.quantity * holding.buyPrice;
+          holding.currentPrice = holding.averageBuyPrice;
+          holding.marketValue = holding.quantity * holding.averageBuyPrice;
           holding.currentValue = holding.marketValue;
           totalMarketValue += holding.marketValue;
         }
       } catch (e) {
         print('Error updating price for ${holding.symbol}: $e');
-        holding.currentPrice = holding.buyPrice;
-        holding.marketValue = holding.quantity * holding.buyPrice;
+        holding.currentPrice = holding.averageBuyPrice;
+        holding.marketValue = holding.quantity * holding.averageBuyPrice;
         holding.currentValue = holding.marketValue;
         totalMarketValue += holding.marketValue;
       }
@@ -281,5 +282,21 @@ class PaperTradingProvider extends ChangeNotifier {
     portfolio.totalMarketValue = totalMarketValue;
     portfolio.totalInvestment = totalInvestment;
     portfolio.totalProfit = totalMarketValue - totalInvestment;
+
+    // If cumulativePurchases was not set from server data, calculate from trades
+    if (portfolio.cumulativePurchases <= 0 && portfolio.paperTrades.isNotEmpty) {
+      double totalPurchases = 0.0;
+      for (var trade in portfolio.paperTrades) {
+        if (trade.type.toUpperCase() == 'BUY') {
+          totalPurchases += trade.totalAmount;
+        }
+      }
+      portfolio.cumulativePurchases = totalPurchases;
+    }
+    
+    // Important: Portfolio value is Cash Balance + Market Value of Holdings
+    // No need to modify the calculation as portfolio.portfolioValue already 
+    // returns currentBalance + totalMarketValue
+    print('Portfolio updated: Cash Balance=${portfolio.currentBalance}, Market Value=${totalMarketValue}, Total Value=${portfolio.portfolioValue}');
   }
 }

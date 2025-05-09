@@ -204,7 +204,7 @@ class _PaperPortfolioDetailScreenState extends State<PaperPortfolioDetailScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Current Balance',
+                      'Cash Balance',
                       style: TextStyle(color: Colors.grey[600], fontSize: 12),
                     ),
                     SizedBox(height: 4),
@@ -221,12 +221,12 @@ class _PaperPortfolioDetailScreenState extends State<PaperPortfolioDetailScreen>
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      'Invested Amount',
+                      'Total Spent',
                       style: TextStyle(color: Colors.grey[600], fontSize: 12),
                     ),
                     SizedBox(height: 4),
                     Text(
-                      'Rs. ${formatter.format(portfolio.totalInvested)}',
+                      'Rs. ${formatter.format(portfolio.totalSpent)}',
                       style: TextStyle(fontSize: 16),
                     ),
                   ],
@@ -241,7 +241,48 @@ class _PaperPortfolioDetailScreenState extends State<PaperPortfolioDetailScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Portfolio Value',
+                      'Holdings Value',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Rs. ${formatter.format(portfolio.totalMarketValue)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Overall ROI',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      '${portfolio.returnOnInvestment.toStringAsFixed(2)}%',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: portfolio.returnOnInvestment >= 0 ? Colors.green[700] : Colors.red[700],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total Portfolio Value',
                       style: TextStyle(color: Colors.grey[600], fontSize: 12),
                     ),
                     SizedBox(height: 4),
