@@ -188,7 +188,7 @@ class PaperTradingService {
         print('Detected balance format error, attempting auto-recovery...');
         
         // Try to fix the balance automatically
-        final fixResult = await fixPortfolioBalance(portfolioId);
+        final fixResult = await fixPortfolioBalanceAuto(portfolioId);
         
         if (fixResult) {
           // Try the trade again
@@ -221,6 +221,45 @@ class PaperTradingService {
     }
   }
   
+  // Add a method to manually fix portfolio balance with a specific value
+  Future<bool> fixPortfolioBalance(int portfolioId, double newBalance) async {
+    try {
+      final response = await _apiClient.post(
+        '$baseUrl/portfolios/$portfolioId/reset-balance',
+        data: {
+          'balance': newBalance.toString(),
+        },
+      );
+      
+      return response.statusCode == 200 && response.data['success'] == true;
+    } catch (e) {
+      print('Error fixing portfolio balance: $e');
+      return false;
+    }
+  }
+  
+  // Automatically fix portfolio balance by calling the server-side fix endpoint
+  Future<bool> fixPortfolioBalanceAuto(int portfolioId) async {
+    try {
+      print('Attempting to fix balance for portfolio $portfolioId');
+      
+      final response = await _apiClient.post(
+        '$baseUrl/portfolios/$portfolioId/fix-balance',
+      );
+      
+      print('Fix balance response: ${response.statusCode} - ${response.data}');
+      
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        return true;
+      }
+      
+      throw Exception(response.data['message'] ?? 'Failed to fix portfolio balance');
+    } catch (e) {
+      print('Error fixing portfolio balance: $e');
+      rethrow;
+    }
+  }
+  
   // New method to attempt balance recovery
   Future<bool> _attemptBalanceRecovery(int portfolioId) async {
     try {
@@ -247,18 +286,13 @@ class PaperTradingService {
         
         // 3. Reset the portfolio balance via API
         print('Resetting portfolio $portfolioId balance to ${estimatedBalance}');
-        final resetResponse = await _apiClient.post(
-          '$baseUrl/portfolios/$portfolioId/reset-balance',
-          data: {
-            'balance': estimatedBalance.toString(),
-          },
-        );
+        final resetResponse = await fixPortfolioBalance(portfolioId, estimatedBalance);
         
-        if (resetResponse.statusCode == 200 && resetResponse.data['success'] == true) {
+        if (resetResponse) {
           print('Balance successfully reset to $estimatedBalance');
           return true;
         } else {
-          print('Failed to reset balance: ${resetResponse.data}');
+          print('Failed to reset balance');
           return false;
         }
       }
@@ -299,45 +333,6 @@ class PaperTradingService {
     } catch (e) {
       print('Error in trade retry: $e');
       return false;
-    }
-  }
-  
-  // Add a method to manually fix portfolio balance
-  Future<bool> fixPortfolioBalance(int portfolioId, double newBalance) async {
-    try {
-      final response = await _apiClient.post(
-        '$baseUrl/portfolios/$portfolioId/reset-balance',
-        data: {
-          'balance': newBalance.toString(),
-        },
-      );
-      
-      return response.statusCode == 200 && response.data['success'] == true;
-    } catch (e) {
-      print('Error fixing portfolio balance: $e');
-      return false;
-    }
-  }
-  
-  // New method to fix portfolio balance
-  Future<bool> fixPortfolioBalance(int portfolioId) async {
-    try {
-      print('Attempting to fix balance for portfolio $portfolioId');
-      
-      final response = await _apiClient.post(
-        '$baseUrl/portfolios/$portfolioId/fix-balance',
-      );
-      
-      print('Fix balance response: ${response.statusCode} - ${response.data}');
-      
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        return true;
-      }
-      
-      throw Exception(response.data['message'] ?? 'Failed to fix portfolio balance');
-    } catch (e) {
-      print('Error fixing portfolio balance: $e');
-      rethrow;
     }
   }
   

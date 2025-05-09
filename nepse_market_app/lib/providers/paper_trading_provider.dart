@@ -217,7 +217,8 @@ class PaperTradingProvider extends ChangeNotifier {
     notifyListeners();
     
     try {
-      final success = await _paperTradingService.fixPortfolioBalance(portfolioId);
+      // Call the renamed method that doesn't require a balance parameter
+      final success = await _paperTradingService.fixPortfolioBalanceAuto(portfolioId);
       
       if (success) {
         // Refresh portfolio details

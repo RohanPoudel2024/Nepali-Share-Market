@@ -315,7 +315,7 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
                 });
                 
                 // Attempt to fix the balance
-                final success = await provider.fixPortfolioBalance(widget.portfolioId);
+                final success = await provider.fixBalanceIssue(widget.portfolioId);
                 
                 if (!mounted) return;
                 
