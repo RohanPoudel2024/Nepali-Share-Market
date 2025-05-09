@@ -171,6 +171,7 @@ class PaperTradingService {
           'type': type,
           'quantity': quantity.toString(), // Convert to string to avoid precision issues
           'price': price.toString(), // Convert to string to avoid precision issues
+          'companyName': symbol, // Include symbol as company name as fallback
         },
       );
       
@@ -180,10 +181,162 @@ class PaperTradingService {
         return true;
       }
       
-      // Handle error cases with more details
+      // Handle specific balance error
+      if (response.statusCode == 400 && 
+          response.data['message']?.toString().contains('Invalid balance format') == true) {
+        
+        print('Detected balance format error, attempting auto-recovery...');
+        
+        // Try to fix the balance automatically
+        final fixResult = await fixPortfolioBalance(portfolioId);
+        
+        if (fixResult) {
+          // Try the trade again
+          print('Auto-recovery successful, retrying trade...');
+          
+          final retryResponse = await _apiClient.post(
+            '$baseUrl/portfolios/$portfolioId/trades',
+            data: {
+              'symbol': symbol,
+              'type': type,
+              'quantity': quantity.toString(),
+              'price': price.toString(),
+              'companyName': symbol,
+            },
+          );
+          
+          if (retryResponse.statusCode == 200 && retryResponse.data['success'] == true) {
+            return true;
+          }
+        }
+        
+        // If we get here, the auto-recovery failed or the retry failed
+        throw Exception('Failed to execute trade after balance recovery attempt');
+      }
+      
       throw Exception(response.data['message'] ?? 'Failed to execute trade');
     } catch (e) {
       print('Error executing paper trade: $e');
+      rethrow;
+    }
+  }
+  
+  // New method to attempt balance recovery
+  Future<bool> _attemptBalanceRecovery(int portfolioId) async {
+    try {
+      print('Attempting balance recovery for portfolio $portfolioId');
+      
+      // 1. First try to get portfolio details to check if we can get initial balance
+      final portfolio = await getPaperPortfolioDetails(portfolioId);
+      
+      if (portfolio.initialBalance > 0) {
+        // 2. Estimate the correct balance based on initial balance and trades
+        double estimatedBalance = portfolio.initialBalance;
+        
+        // Get all trades to calculate balance
+        final trades = await getPaperTradeHistory(portfolioId);
+        
+        // Apply all trades to estimate balance
+        for (var trade in trades) {
+          if (trade.type.toUpperCase() == 'BUY') {
+            estimatedBalance -= trade.totalAmount;
+          } else if (trade.type.toUpperCase() == 'SELL') {
+            estimatedBalance += trade.totalAmount;
+          }
+        }
+        
+        // 3. Reset the portfolio balance via API
+        print('Resetting portfolio $portfolioId balance to ${estimatedBalance}');
+        final resetResponse = await _apiClient.post(
+          '$baseUrl/portfolios/$portfolioId/reset-balance',
+          data: {
+            'balance': estimatedBalance.toString(),
+          },
+        );
+        
+        if (resetResponse.statusCode == 200 && resetResponse.data['success'] == true) {
+          print('Balance successfully reset to $estimatedBalance');
+          return true;
+        } else {
+          print('Failed to reset balance: ${resetResponse.data}');
+          return false;
+        }
+      }
+      
+      return false;
+    } catch (e) {
+      print('Error in balance recovery: $e');
+      return false;
+    }
+  }
+  
+  // Retry trade execution after recovery
+  Future<bool> _retryTradeExecution(
+    int portfolioId,
+    String symbol,
+    String type,
+    double quantity,
+    double price,
+  ) async {
+    try {
+      final response = await _apiClient.post(
+        '$baseUrl/portfolios/$portfolioId/trades',
+        data: {
+          'symbol': symbol,
+          'type': type,
+          'quantity': quantity.toString(),
+          'price': price.toString(),
+        },
+      );
+      
+      print('Retry trade API response: ${response.statusCode} - ${response.data}');
+      
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        return true;
+      }
+      
+      throw Exception('Trade retry failed: ${response.data['message'] ?? 'Unknown error'}');
+    } catch (e) {
+      print('Error in trade retry: $e');
+      return false;
+    }
+  }
+  
+  // Add a method to manually fix portfolio balance
+  Future<bool> fixPortfolioBalance(int portfolioId, double newBalance) async {
+    try {
+      final response = await _apiClient.post(
+        '$baseUrl/portfolios/$portfolioId/reset-balance',
+        data: {
+          'balance': newBalance.toString(),
+        },
+      );
+      
+      return response.statusCode == 200 && response.data['success'] == true;
+    } catch (e) {
+      print('Error fixing portfolio balance: $e');
+      return false;
+    }
+  }
+  
+  // New method to fix portfolio balance
+  Future<bool> fixPortfolioBalance(int portfolioId) async {
+    try {
+      print('Attempting to fix balance for portfolio $portfolioId');
+      
+      final response = await _apiClient.post(
+        '$baseUrl/portfolios/$portfolioId/fix-balance',
+      );
+      
+      print('Fix balance response: ${response.statusCode} - ${response.data}');
+      
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        return true;
+      }
+      
+      throw Exception(response.data['message'] ?? 'Failed to fix portfolio balance');
+    } catch (e) {
+      print('Error fixing portfolio balance: $e');
       rethrow;
     }
   }

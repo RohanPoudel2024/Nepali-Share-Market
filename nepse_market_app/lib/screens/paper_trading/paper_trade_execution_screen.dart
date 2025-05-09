@@ -220,32 +220,25 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
   }
 
   Future<void> _executeTrade() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
     
     setState(() {
       _isExecuting = true;
       _errorMessage = null;
     });
     
+    final symbol = _symbolController.text.trim().toUpperCase();
+    final quantity = double.parse(_quantityController.text);
+    final price = _useCurrentPrice ? null : double.parse(_priceController.text);
+    
     try {
-      final symbol = _symbolController.text.trim();
-      final type = _selectedType;
-      final quantity = double.parse(_quantityController.text);
-      final price = double.parse(_priceController.text);
-      
-      if (price <= 0) {
-        throw Exception('Price must be greater than zero');
-      }
-      
-      if (quantity <= 0) {
-        throw Exception('Quantity must be greater than zero');
-      }
-      
       final paperTradingProvider = Provider.of<PaperTradingProvider>(context, listen: false);
       final success = await paperTradingProvider.executePaperTrade(
         widget.portfolioId,
         symbol,
-        type,
+        _selectedType,
         quantity,
         price,
       );
@@ -257,10 +250,19 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
         await Future.delayed(Duration(milliseconds: 500));
         Navigator.pop(context, true);
       } else {
-        setState(() {
-          _errorMessage = paperTradingProvider.errorMessage ?? 'Failed to execute trade';
-          _isExecuting = false;
-        });
+        final errorMessage = paperTradingProvider.errorMessage;
+        
+        // Check if this is a balance format error that we can help recover from
+        if (errorMessage != null && 
+            (errorMessage.contains('invalid') || errorMessage.contains('repair'))) {
+          // Show a dialog offering to fix the balance
+          _showBalanceRepairDialog(paperTradingProvider);
+        } else {
+          setState(() {
+            _errorMessage = errorMessage ?? 'Failed to execute trade';
+            _isExecuting = false;
+          });
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -270,6 +272,78 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
         _isExecuting = false;
       });
     }
+  }
+  
+  void _showBalanceRepairDialog(PaperTradingProvider provider) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Portfolio Balance Issue'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Your portfolio balance appears to be in an invalid format.'),
+              SizedBox(height: 8),
+              Text('Would you like to automatically repair it?'),
+              SizedBox(height: 16),
+              Text(
+                'Note: This will recalculate your balance based on your initial deposit and trade history.',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                setState(() {
+                  _isExecuting = false;
+                  _errorMessage = "Portfolio balance needs repair. Please try the 'Repair Balance' option.";
+                });
+              },
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                
+                setState(() {
+                  _errorMessage = 'Repairing portfolio balance...';
+                });
+                
+                // Attempt to fix the balance
+                final success = await provider.fixPortfolioBalance(widget.portfolioId);
+                
+                if (!mounted) return;
+                
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Portfolio balance repaired successfully!'))
+                  );
+                  
+                  setState(() {
+                    _errorMessage = null;
+                    _isExecuting = false;
+                  });
+                  
+                  // Retry the trade
+                  _executeTrade();
+                } else {
+                  setState(() {
+                    _errorMessage = 'Failed to repair portfolio balance. Please try again later.';
+                    _isExecuting = false;
+                  });
+                }
+              },
+              child: Text('Repair Balance'),
+            ),
+          ],
+        );
+      },
+    );
   }
   
   double _calculateTradeTotal() {

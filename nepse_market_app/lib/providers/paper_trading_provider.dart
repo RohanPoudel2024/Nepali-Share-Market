@@ -165,51 +165,19 @@ class PaperTradingProvider extends ChangeNotifier {
     return false; // Disabled function - we only use the default portfolio
   }
   
-  // Execute a paper trade with improved balance handling
-  Future<bool> executePaperTrade(
-    int portfolioId,
-    String symbol,
-    String type,
-    double quantity,
-    double? price,
-  ) async {
+  // Improved trade execution with error handling
+  Future<bool> executePaperTrade(int portfolioId, String symbol, String type, double quantity, double? price) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
     
     try {
-      // Validate the trade locally first for quick feedback
-      if (_selectedPaperPortfolio != null && 
-          type.toUpperCase() == 'BUY' && 
-          _selectedPaperPortfolio!.id == portfolioId) {
-        
-        final actualPrice = price ?? _marketProvider.getStockPrice(symbol) ?? 0;
-        if (actualPrice <= 0) {
-          throw Exception('Invalid stock price');
-        }
-        
-        // Calculate trade amount
-        final tradeAmount = quantity * actualPrice;
-        
-        // Check if there's enough cash balance
-        if (_selectedPaperPortfolio!.currentBalance < tradeAmount) {
-          throw Exception('Insufficient balance. You need Rs. ${tradeAmount.toStringAsFixed(2)} but have Rs. ${_selectedPaperPortfolio!.currentBalance.toStringAsFixed(2)}');
-        }
+      final actualPrice = price ?? _marketProvider.getStockPrice(symbol) ?? 0;
+      
+      if (actualPrice <= 0) {
+        throw Exception("Invalid stock price");
       }
       
-      double actualPrice;
-      
-      if (price != null) {
-        actualPrice = price;
-      } else {
-        final marketPrice = _marketProvider.getStockPrice(symbol);
-        if (marketPrice == null || marketPrice <= 0) {
-          throw Exception('Could not determine current market price for $symbol');
-        }
-        actualPrice = marketPrice;
-      }
-      
-      // Execute the trade on the server
       final success = await _paperTradingService.executePaperTrade(
         portfolioId,
         symbol,
@@ -218,24 +186,99 @@ class PaperTradingProvider extends ChangeNotifier {
         actualPrice,
       );
       
-      if (!success) {
-        throw Exception('Failed to execute paper trade');
+      // Refresh portfolio data on success
+      if (success) {
+        await loadPaperPortfolioDetails(portfolioId);
       }
-      
-      // Optional: Simulate trade locally for immediate UI feedback
-      if (_selectedPaperPortfolio != null && _selectedPaperPortfolio!.id == portfolioId) {
-        _selectedPaperPortfolio!.simulateTrade(type, symbol, quantity, actualPrice);
-      }
-      
-      // Reload complete portfolio data to get accurate state
-      await _loadPaperPortfolioDetailsInternal(portfolioId);
       
       _isLoading = false;
       notifyListeners();
-      return true;
+      return success;
     } catch (e) {
-      _errorMessage = e.toString();
-      print('Error executing paper trade: $e');
+      String errorMsg = e.toString();
+      
+      // Special handling for balance format errors
+      if (errorMsg.contains('Invalid balance format')) {
+        _errorMessage = "Portfolio balance issue detected. Please use the 'Fix Balance' button below.";
+      } else {
+        _errorMessage = errorMsg;
+      }
+      
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+  
+  // Add a method to fix balance issues
+  Future<bool> fixBalanceIssue(int portfolioId) async {
+    _isLoading = true;
+    _errorMessage = "Attempting to fix portfolio balance...";
+    notifyListeners();
+    
+    try {
+      final success = await _paperTradingService.fixPortfolioBalance(portfolioId);
+      
+      if (success) {
+        // Refresh portfolio details
+        await loadPaperPortfolioDetails(portfolioId);
+        _errorMessage = null;
+      } else {
+        _errorMessage = "Failed to fix portfolio balance";
+      }
+      
+      _isLoading = false;
+      notifyListeners();
+      return success;
+    } catch (e) {
+      _errorMessage = "Error fixing balance: ${e.toString()}";
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+  
+  // Add a method to fix portfolio balance
+  Future<bool> fixPortfolioBalance(int portfolioId) async {
+    _isLoading = true;
+    notifyListeners();
+    
+    try {
+      // Calculate the proper balance based on initial balance and trades
+      double estimatedBalance = 150000; // Default
+      
+      if (_selectedPaperPortfolio != null) {
+        estimatedBalance = _selectedPaperPortfolio!.initialBalance;
+        
+        // Apply trades
+        if (_paperTrades.isNotEmpty) {
+          for (var trade in _paperTrades) {
+            if (trade.type.toUpperCase() == 'BUY') {
+              estimatedBalance -= trade.totalAmount;
+            } else if (trade.type.toUpperCase() == 'SELL') {
+              estimatedBalance += trade.totalAmount;
+            }
+          }
+        }
+      }
+      
+      // Fix the balance
+      final success = await _paperTradingService.fixPortfolioBalance(portfolioId, estimatedBalance);
+      
+      // Reload portfolio details
+      if (success) {
+        await loadPaperPortfolioDetails(portfolioId);
+        _errorMessage = null;
+      } else {
+        _errorMessage = 'Failed to repair portfolio balance';
+      }
+      
+      _isLoading = false;
+      notifyListeners();
+      return success;
+    } catch (e) {
+      _errorMessage = 'Error fixing portfolio balance: $e';
+      print(_errorMessage);
       _isLoading = false;
       notifyListeners();
       return false;

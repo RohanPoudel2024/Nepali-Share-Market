@@ -1,4 +1,5 @@
-const bcrypt = require('bcrypt');
+// Use pure JS implementation of bcrypt for better cross-platform compatibility
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { db } = require('../config/database');
 const { users } = require('../models/schema');

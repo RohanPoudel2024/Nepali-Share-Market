@@ -16,4 +16,10 @@ router.get('/portfolios/:portfolioId', paperTradingController.getPortfolioDetail
 router.post('/portfolios/:portfolioId/trades', paperTradingController.executeTrade);
 router.get('/portfolios/:portfolioId/trades', paperTradingController.getTradeHistory);
 
+// Add a new route for balance reset
+router.post('/portfolios/:portfolioId/reset-balance', paperTradingController.resetPortfolioBalance);
+
+// Add new route for fixing balances
+router.post('/portfolios/:portfolioId/fix-balance', paperTradingController.fixPortfolioBalance);
+
 module.exports = router;

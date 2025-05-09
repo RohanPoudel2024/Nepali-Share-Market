@@ -274,6 +274,73 @@ const paperTradingController = {
         data: []
       });
     }
+  },
+
+  // Reset portfolio balance
+  resetPortfolioBalance: async (req, res) => {
+    try {
+      const { portfolioId } = req.params;
+      const { balance } = req.body;
+      
+      console.log(`Request to reset portfolio ${portfolioId} balance to ${balance}`);
+      
+      if (!balance) {
+        return res.status(400).json({
+          success: false,
+          message: 'Balance is required'
+        });
+      }
+      
+      const parsedBalance = parseFloat(balance);
+      if (isNaN(parsedBalance)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Balance must be a valid number'
+        });
+      }
+      
+      // Update the portfolio balance
+      const updatedPortfolio = await paperTradingService.updatePortfolioBalance(
+        portfolioId, 
+        parsedBalance
+      );
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Portfolio balance updated successfully',
+        data: updatedPortfolio
+      });
+    } catch (error) {
+      console.error('Error in resetPortfolioBalance:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to update portfolio balance',
+        error: error.message
+      });
+    }
+  },
+
+  // Add this new method for fixing portfolio balances
+  fixPortfolioBalance: async (req, res) => {
+    try {
+      const { portfolioId } = req.params;
+      console.log(`Request to fix balance for portfolio ${portfolioId}`);
+      
+      // Attempt to diagnose and fix the balance
+      const result = await paperTradingService.diagnoseAndFixBalance(portfolioId);
+      
+      return res.status(200).json({
+        success: true,
+        message: `Portfolio balance fixed from ${result.original} to ${result.fixed}`,
+        data: result.portfolio
+      });
+    } catch (error) {
+      console.error('Error fixing portfolio balance:', error);
+      return res.status(500).json({
+        success: false,
+        message: `Failed to fix portfolio balance: ${error.message}`
+      });
+    }
   }
 };
 
