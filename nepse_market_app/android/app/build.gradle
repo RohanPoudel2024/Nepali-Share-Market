@@ -4,8 +4,10 @@ plugins {
 }
 
 android {
+    ndkVersion "27.0.12077973"
     namespace 'com.example.nepse_market_app'
     compileSdk 34
+    
 
     defaultConfig {
         applicationId "com.example.nepse_market_app"
