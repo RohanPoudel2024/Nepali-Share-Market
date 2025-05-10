@@ -12,8 +12,13 @@
       <excludeFolder url="file://$MODULE_DIR$/nsm/.dart_tool" />
       <excludeFolder url="file://$MODULE_DIR$/nsm/.pub" />
       <excludeFolder url="file://$MODULE_DIR$/nsm/build" />
+      <excludeFolder url="file://$MODULE_DIR$/nepse_market_app_new/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/nepse_market_app_new/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/nepse_market_app_new/build" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="Dart SDK" level="project" />
+    <orderEntry type="library" name="Dart Packages" level="project" />
   </component>
 </module>
