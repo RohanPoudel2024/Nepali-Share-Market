@@ -1,6 +1,25 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 class ApiEndpoints {
   // Using static field to allow hot reload changes
-  static String baseUrl = 'http://localhost:9090/api';
+  static String baseUrl = _getBaseUrl();
+
+  // Add this method to determine the appropriate base URL
+  static String _getBaseUrl() {
+    // For web, use localhost
+    if (kIsWeb) {
+      return 'http://localhost:9090/api';
+    }
+    // For Android emulator, use the special IP
+    else if (!kIsWeb && Platform.isAndroid) {
+      return 'http://10.0.2.2:9090/api';
+    }
+    // For other platforms, use localhost
+    else {
+      return 'http://localhost:9090/api';
+    }
+  }
 
   // Auth endpoints
   static String get login => '$baseUrl/auth/login';
@@ -30,8 +49,8 @@ class ApiEndpoints {
   static void updatePort(String port) {
     baseUrl = 'http://localhost:$port/api';
   }
-  
-  // Method to update the entire base URL
+
+  // Update this method to respect the platform too
   static void updateBaseUrl(String newBaseUrl) {
     baseUrl = newBaseUrl;
   }
