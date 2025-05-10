@@ -86,47 +86,65 @@ class PaperTradingService {
     }
   }
   
-  // Get portfolio details with improved error handling
+  // Improved error handling in getPaperPortfolioDetails
   Future<PaperPortfolio> getPaperPortfolioDetails(int portfolioId) async {
     try {
-      print('Fetching portfolio details for ID: $portfolioId');
-      final response = await _apiClient.get('$baseUrl/portfolios/$portfolioId');
+      final response = await _apiClient.get(
+        '$baseUrl/portfolios/$portfolioId/details',
+      );
       
-      print('Portfolio details response: ${response.statusCode}');
       if (response.statusCode == 200 && response.data['success'] == true) {
         final portfolioData = response.data['data'];
-        print('Portfolio data received: ${portfolioData != null}');
         
-        if (portfolioData != null) {
-          final portfolio = PaperPortfolio.fromJson(portfolioData);
-          return portfolio;
+        // Enhanced logging
+        print('Portfolio data from server: ${portfolioData['current_balance']} (${portfolioData['current_balance'].runtimeType})');
+        
+        final portfolio = PaperPortfolio.fromJson(portfolioData);
+        
+        // Validation: If balance is invalid, try auto-repair
+        if (portfolio.currentBalance.isNaN || portfolio.currentBalance == 150000) {
+          print('Possible invalid balance detected in API response, attempting repair');
+          return await fixPortfolioBalanceAuto(portfolioId).then((_) => 
+            refreshPaperPortfolioDetails(portfolioId)
+          );
         }
+        
+        return portfolio;
       }
       
-      throw Exception('Failed to load portfolio details - invalid response');
+      throw Exception('Failed to load portfolio details');
     } catch (e) {
-      print('Error fetching paper portfolio details: $e');
+      print('Error getting portfolio details: $e');
+      rethrow;
+    }
+  }
+  
+  // Force refresh portfolio data from server (bypass any caching)
+  Future<PaperPortfolio> refreshPaperPortfolioDetails(int portfolioId) async {
+    try {
+      print('Force refreshing portfolio $portfolioId from server');
       
-      // Try to get the basic portfolio list first
-      try {
-        final portfolios = await getPaperPortfolios();
-        for (var portfolio in portfolios) {
-          if (portfolio.id == portfolioId) {
-            // Found the portfolio, but without details
-            return portfolio;
-          }
-        }
+      // Add cache-busting query parameter
+      final response = await _apiClient.get(
+        '$baseUrl/portfolios/$portfolioId/details',
+        queryParameters: {'_nocache': DateTime.now().millisecondsSinceEpoch.toString()},
+      );
+      
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        final portfolioData = response.data['data'];
         
-        // If we can't find the specific portfolio, return the first available or create a new one
-        if (portfolios.isNotEmpty) {
-          return portfolios.first;
-        }
-      } catch (innerError) {
-        print('Failed to fetch portfolios as fallback: $innerError');
+        // Log raw values for debugging
+        print('REFRESH: Raw balance from server: ${portfolioData['current_balance']} (${portfolioData['current_balance'].runtimeType})');
+        
+        final portfolio = PaperPortfolio.fromJson(portfolioData);
+        print('REFRESH: Parsed portfolio balance: ${portfolio.currentBalance}');
+        return portfolio;
       }
       
-      // Last resort - create a default portfolio
-      return _createDefaultPortfolio(portfolioId);
+      throw Exception('Failed to refresh portfolio details');
+    } catch (e) {
+      print('Error refreshing portfolio: $e');
+      rethrow;
     }
   }
   
@@ -171,7 +189,6 @@ class PaperTradingService {
           'type': type,
           'quantity': quantity.toString(), // Convert to string to avoid precision issues
           'price': price.toString(), // Convert to string to avoid precision issues
-          'companyName': symbol, // Include symbol as company name as fallback
         },
       );
       
@@ -201,7 +218,6 @@ class PaperTradingService {
               'type': type,
               'quantity': quantity.toString(),
               'price': price.toString(),
-              'companyName': symbol,
             },
           );
           
@@ -366,6 +382,48 @@ class PaperTradingService {
       print('Error fetching paper trade history: $e');
       // Return empty list on error
       return [];
+    }
+  }
+  
+  // Add a method to validate portfolio balance and fix if necessary
+  Future<bool> validatePortfolioBalance(int portfolioId) async {
+    try {
+      print('Validating balance for portfolio $portfolioId');
+      
+      // Get portfolio details
+      final portfolio = await getPaperPortfolioDetails(portfolioId);
+      
+      // Check if portfolio balance is valid
+      if (portfolio.currentBalance.isNaN || 
+          portfolio.currentBalance.isInfinite ||
+          portfolio.currentBalance.toString() == 'null') {
+        print('Invalid portfolio balance detected: ${portfolio.currentBalance}');
+        return await fixPortfolioBalanceAuto(portfolioId);
+      }
+      
+      // Get trades to verify balance
+      final trades = await getPaperTradeHistory(portfolioId);
+      
+      // Calculate expected balance
+      double calculatedBalance = portfolio.initialBalance;
+      for (var trade in trades) {
+        if (trade.type.toUpperCase() == 'BUY') {
+          calculatedBalance -= trade.totalAmount;
+        } else if (trade.type.toUpperCase() == 'SELL') {
+          calculatedBalance += trade.totalAmount;
+        }
+      }
+      
+      // Allow small rounding differences (0.01)
+      if ((calculatedBalance - portfolio.currentBalance).abs() > 0.01) {
+        print('Balance mismatch: stored=${portfolio.currentBalance}, calculated=$calculatedBalance');
+        return await fixPortfolioBalance(portfolioId, calculatedBalance);
+      }
+      
+      return true; // Balance is valid
+    } catch (e) {
+      print('Error validating portfolio balance: $e');
+      return false;
     }
   }
   

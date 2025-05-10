@@ -12,8 +12,8 @@ module.exports = async ({ db, client }) => {
       "user_id" integer, /* Changed from NOT NULL to allow anonymous users */
       "name" varchar(255) NOT NULL,
       "description" text,
-      "initial_balance" numeric NOT NULL DEFAULT 150000,
-      "current_balance" numeric NOT NULL DEFAULT 150000,
+      "initial_balance" numeric(14,2) NOT NULL DEFAULT 150000.00,
+      "current_balance" numeric(14,2) NOT NULL DEFAULT 150000.00,
       "created_at" timestamp DEFAULT NOW(),
       "updated_at" timestamp DEFAULT NOW()
     );
@@ -26,9 +26,10 @@ module.exports = async ({ db, client }) => {
       "portfolio_id" integer NOT NULL,
       "symbol" varchar(20) NOT NULL,
       "company_name" varchar(255),
-      "quantity" numeric NOT NULL,
-      "average_buy_price" numeric NOT NULL,
-      "buy_price" numeric NOT NULL,
+      "quantity" numeric(14,6) NOT NULL,
+      "average_buy_price" numeric(14,2) NOT NULL,
+      "buy_price" numeric(14,2) NOT NULL,
+      "is_active" boolean DEFAULT TRUE,
       "created_at" timestamp DEFAULT NOW(),
       "updated_at" timestamp DEFAULT NOW(),
       FOREIGN KEY ("portfolio_id") REFERENCES "paper_portfolios" ("id") ON DELETE CASCADE
@@ -41,10 +42,11 @@ module.exports = async ({ db, client }) => {
       "id" serial PRIMARY KEY,
       "portfolio_id" integer NOT NULL,
       "symbol" varchar(20) NOT NULL,
+      "company_name" varchar(255),
       "type" varchar(10) NOT NULL,
-      "quantity" numeric NOT NULL,
-      "price" numeric NOT NULL,
-      "total_amount" numeric NOT NULL,
+      "quantity" numeric(14,6) NOT NULL,
+      "price" numeric(14,2) NOT NULL,
+      "total_amount" numeric(14,2) NOT NULL,
       "trade_date" timestamp DEFAULT NOW(),
       "created_at" timestamp DEFAULT NOW(),
       FOREIGN KEY ("portfolio_id") REFERENCES "paper_portfolios" ("id") ON DELETE CASCADE

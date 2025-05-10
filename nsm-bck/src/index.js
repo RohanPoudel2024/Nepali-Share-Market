@@ -9,6 +9,7 @@ const marketRoutes = require('./routes/market');
 const portfolioRoutes = require('./routes/portfolio');
 const paperTradingRoutes = require('./routes/paperTradingRoutes');
 const runMigrations = require('./config/run-migrations');
+const { fixAllPortfolioBalances } = require('./config/fix-balances'); // Add near the beginning of server startup
 
 const app = express();
 const PORT = process.env.PORT || 9090;
@@ -93,31 +94,30 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Check database connection
+// Check database connection and start server in proper sequence
 const { db, client } = require('./config/database');
-(async () => {
+
+const startServer = async (port) => {
   try {
-    // The correct way to query with postgres.js is to call the client directly
-    // or use the unsafe method for raw SQL queries
+    // 1. First check database connection
+    console.log('Checking database connection...');
     await client.unsafe('SELECT 1');
     console.log('Database connection successful');
-  } catch (err) {
-    console.error('Database connection failed:', err);
-  }
-})();
-
-const startServer = (port) => {
-  app.listen(port, async () => {
-    try {
-      // Run migrations before starting the server
-      await runMigrations();
+    
+    // 2. Then run migrations
+    console.log('Running migrations...');
+    await runMigrations();
+    console.log('Migrations completed');
+    
+    // 3. Fix any portfolio balance issues at startup
+    console.log('Verifying portfolio balances...');
+    await fixAllPortfolioBalances();
+    console.log('Balance verification completed');
+    
+    // 4. Finally start the server
+    app.listen(port, () => {
       console.log(`Server is running on port ${port}`);
-    } catch (error) {
-      console.error('Failed to start server properly:', error);
-      process.exit(1);
-    }
-  })
-    .on('error', (err) => {
+    }).on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
         console.log(`Port ${port} is busy, trying ${port + 1}`);
         startServer(port + 1);
@@ -125,6 +125,11 @@ const startServer = (port) => {
         console.error('Server error:', err);
       }
     });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
 };
 
+// Start the server
 startServer(PORT);

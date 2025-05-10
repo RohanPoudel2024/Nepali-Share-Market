@@ -53,6 +53,9 @@ class PaperTradingProvider extends ChangeNotifier {
         }
       }
       
+      // Validate balances for all portfolios (run in background)
+      _validateAllPortfolioBalances();
+      
       // Update market prices for all portfolios
       for (var portfolio in _paperPortfolios) {
         try {
@@ -130,14 +133,17 @@ class PaperTradingProvider extends ChangeNotifier {
     notifyListeners();
     
     try {
+      print('Loading paper portfolio details for ID: $portfolioId');
+      
       // Get portfolio details
       final portfolio = await _paperTradingService.getPaperPortfolioDetails(portfolioId);
+      
+      print('Loaded portfolio: id=${portfolio.id}, balance=${portfolio.currentBalance}, initial=${portfolio.initialBalance}');
       
       // Update prices
       _updatePortfolioMarketPrices(portfolio);
       
       // Load trade history separately to ensure it's up to date
-      // If this fails, we'll still have the portfolio data
       try {
         _paperTrades = await _paperTradingService.getPaperTradeHistory(portfolioId);
       } catch (tradeError) {
@@ -145,10 +151,11 @@ class PaperTradingProvider extends ChangeNotifier {
         _paperTrades = [];
       }
       
-      // Set as selected portfolio
+      // Set as selected portfolio - preserve the current balance that came from server
       _selectedPaperPortfolio = portfolio;
       
-      print('Loaded portfolio: id=${portfolio.id}, balance=${portfolio.currentBalance}, holdings=${portfolio.holdings.length}, trades=${_paperTrades.length}');
+      // Store current balance for debugging
+      print('Stored portfolio with balance: ${_selectedPaperPortfolio?.currentBalance}');
       
       _errorMessage = null;
     } catch (e) {
@@ -165,7 +172,7 @@ class PaperTradingProvider extends ChangeNotifier {
     return false; // Disabled function - we only use the default portfolio
   }
   
-  // Improved trade execution with error handling
+  // Improved trade execution with proper balance handling
   Future<bool> executePaperTrade(int portfolioId, String symbol, String type, double quantity, double? price) async {
     _isLoading = true;
     _errorMessage = null;
@@ -175,7 +182,22 @@ class PaperTradingProvider extends ChangeNotifier {
       final actualPrice = price ?? _marketProvider.getStockPrice(symbol) ?? 0;
       
       if (actualPrice <= 0) {
-        throw Exception("Invalid stock price");
+        _errorMessage = "Cannot get valid market price. Please enter price manually.";
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+      
+      // Pre-validate the trade to avoid server-side balance issues
+      final portfolio = getPortfolio(portfolioId);
+      final tradeAmount = quantity * actualPrice;
+      
+      // For buy orders, ensure we have enough balance
+      if (type.toLowerCase() == 'buy' && portfolio.currentBalance < tradeAmount) {
+        _errorMessage = "Insufficient balance for this trade.";
+        _isLoading = false;
+        notifyListeners();
+        return false;
       }
       
       final success = await _paperTradingService.executePaperTrade(
@@ -189,19 +211,24 @@ class PaperTradingProvider extends ChangeNotifier {
       // Refresh portfolio data on success
       if (success) {
         await loadPaperPortfolioDetails(portfolioId);
+        _errorMessage = null;
       }
       
       _isLoading = false;
       notifyListeners();
       return success;
     } catch (e) {
-      String errorMsg = e.toString();
+      final errorMsg = e.toString();
       
-      // Special handling for balance format errors
-      if (errorMsg.contains('Invalid balance format')) {
-        _errorMessage = "Portfolio balance issue detected. Please use the 'Fix Balance' button below.";
+      // Handle specific error types with user-friendly messages
+      if (errorMsg.contains('Insufficient balance')) {
+        _errorMessage = "You don't have enough balance to complete this trade.";
+      } else if (errorMsg.contains('Invalid balance format')) {
+        _errorMessage = "Portfolio balance needs repair. Please use the 'Fix Balance' option.";
+      } else if (errorMsg.contains('quantity')) {
+        _errorMessage = "Please enter a valid quantity.";
       } else {
-        _errorMessage = errorMsg;
+        _errorMessage = "Error: $errorMsg";
       }
       
       _isLoading = false;
@@ -342,5 +369,134 @@ class PaperTradingProvider extends ChangeNotifier {
     // No need to modify the calculation as portfolio.portfolioValue already 
     // returns currentBalance + totalMarketValue
     print('Portfolio updated: Cash Balance=${portfolio.currentBalance}, Market Value=${totalMarketValue}, Total Value=${portfolio.portfolioValue}');
+  }
+
+  // Add this new method
+  Future<void> _validateAllPortfolioBalances() async {
+    // Don't set loading state as this runs in background
+    try {
+      for (var portfolio in _paperPortfolios) {
+        await _paperTradingService.validatePortfolioBalance(portfolio.id);
+      }
+    } catch (e) {
+      print('Error validating portfolio balances: $e');
+      // Don't set error message as this is a background task
+    }
+  }
+
+  // Improved method to get a specific portfolio by ID with balance validation
+  PaperPortfolio getPortfolio(int portfolioId) {
+    try {
+      final portfolio = _paperPortfolios.firstWhere(
+        (portfolio) => portfolio.id == portfolioId,
+        orElse: () => _createLocalFallbackPortfolio(),
+      );
+      
+      // Validate the portfolio has a valid balance
+      if (portfolio.currentBalance.isNaN || 
+          portfolio.currentBalance.isInfinite ||
+          portfolio.currentBalance <= 0) {
+        print('Warning: Portfolio ${portfolio.id} has invalid balance: ${portfolio.currentBalance}');
+        
+        // Automatically fix the balance if it's invalid
+        // Use initialBalance if available, otherwise default
+        double fixedBalance = 150000.0;
+        if (portfolio.initialBalance > 0 && 
+            !portfolio.initialBalance.isNaN &&
+            !portfolio.initialBalance.isInfinite) {
+          fixedBalance = portfolio.initialBalance;
+        }
+        
+        // Create a copy with the fixed balance
+        return PaperPortfolio(
+          id: portfolio.id,
+          name: portfolio.name,
+          description: portfolio.description,
+          initialBalance: portfolio.initialBalance.isFinite ? portfolio.initialBalance : 150000.0,
+          currentBalance: fixedBalance,
+          holdings: portfolio.holdings,
+          paperTrades: portfolio.paperTrades,
+        );
+      }
+      
+      return portfolio;
+    } catch (e) {
+      print('Error getting portfolio with ID $portfolioId: $e');
+      // Return fallback portfolio if something goes wrong
+      return _selectedPaperPortfolio ?? 
+             (_paperPortfolios.isNotEmpty ? _paperPortfolios.first : _createLocalFallbackPortfolio());
+    }
+  }
+
+  // Add this method to validate portfolio balance before trade
+  Future<bool> validatePortfolioBalance(int portfolioId) async {
+    try {
+      // Don't set loading state since this is a background check
+      final portfolio = getPortfolio(portfolioId);
+      
+      if (portfolio.currentBalance.isNaN || 
+          portfolio.currentBalance.isInfinite ||
+          portfolio.currentBalance == null) {
+        return false;
+      }
+      
+      // For buy trades, we need a positive balance
+      if (portfolio.currentBalance <= 0) {
+        print('Portfolio $portfolioId has non-positive balance: ${portfolio.currentBalance}');
+        return false;
+      }
+      
+      // If we already have a portfolio with a valid balance locally, no need to call server
+      return true;
+    } catch (e) {
+      print('Error validating portfolio balance locally: $e');
+      
+      // Try to validate on the server
+      try {
+        return await _paperTradingService.validatePortfolioBalance(portfolioId);
+      } catch (serverError) {
+        print('Server validation failed: $serverError');
+        return false;
+      }
+    }
+  }
+
+  // Completely refresh portfolio data from server
+  Future<void> forcePaperPortfolioRefresh(int portfolioId) async {
+    try {
+      print('Force refreshing portfolio $portfolioId');
+      _isLoading = true;
+      notifyListeners();
+      
+      // Get fresh data from server with cache bypass
+      final portfolio = await _paperTradingService.refreshPaperPortfolioDetails(portfolioId);
+      
+      // Log the values we got
+      print('Received fresh portfolio data: balance=${portfolio.currentBalance}');
+      
+      // Update prices and market data
+      _updatePortfolioMarketPrices(portfolio);
+      
+      // Reload trade history to ensure everything is in sync
+      _paperTrades = await _paperTradingService.getPaperTradeHistory(portfolioId);
+      
+      // Update selected portfolio with FRESH data
+      _selectedPaperPortfolio = portfolio;
+      
+      // Update the cached portfolio in the list
+      final index = _paperPortfolios.indexWhere((p) => p.id == portfolioId);
+      if (index >= 0) {
+        _paperPortfolios[index] = portfolio;
+      }
+      
+      _errorMessage = null;
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      print('Error during force refresh: $e');
+      _errorMessage = 'Failed to refresh data: $e';
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 }

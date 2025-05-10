@@ -8,9 +8,9 @@ class PaperPortfolio {
   double currentBalance;
   List<PaperHolding> holdings;
   double _totalMarketValue = 0.0;
-  double _totalInvestment = 0.0; // Current investment value (qty × avg price)
+  double _totalInvestment = 0.0;
   double _totalProfit = 0.0;
-  double _cumulativePurchases = 0.0; // Total money spent on buys
+  double _cumulativePurchases = 0.0;
   List<PaperTrade> _paperTrades = [];
 
   PaperPortfolio({
@@ -21,7 +21,9 @@ class PaperPortfolio {
     required this.currentBalance,
     required this.holdings,
     List<PaperTrade>? paperTrades,
-  }) : _paperTrades = paperTrades ?? [];
+    double cumulativePurchases = 0.0,
+  })  : _paperTrades = paperTrades ?? [],
+        _cumulativePurchases = cumulativePurchases;
 
   double get totalMarketValue => _totalMarketValue;
   set totalMarketValue(double value) {
@@ -32,120 +34,35 @@ class PaperPortfolio {
   set totalInvestment(double value) {
     _totalInvestment = value;
   }
-
-  double get cumulativePurchases => _cumulativePurchases;
-  set cumulativePurchases(double value) {
-    _cumulativePurchases = value;
-  }
   
   double get totalProfit => _totalProfit;
   set totalProfit(double value) {
     _totalProfit = value;
   }
 
+  double get cumulativePurchases => _cumulativePurchases;
+  set cumulativePurchases(double value) {
+    _cumulativePurchases = value;
+  }
+
+  double get totalSpent => _cumulativePurchases;
+
   double get portfolioValue {
     return currentBalance + totalMarketValue;
   }
-
-  double get totalInvested => totalInvestment;
-
-  double get totalSpent => cumulativePurchases;
 
   double get profitPercentage {
     if (totalInvestment <= 0) return 0.0;
     return (totalProfit / totalInvestment) * 100;
   }
-
+  
   double get returnOnInvestment {
-    if (cumulativePurchases <= 0) return 0.0;
-
-    double portfolioGain = portfolioValue - initialBalance;
-    return (portfolioGain / cumulativePurchases) * 100;
-  }
-
-  bool canExecuteTrade(String type, double quantity, double price) {
-    if (type.toUpperCase() == 'BUY' || type.toUpperCase() == 'buy') {
-      final tradeAmount = quantity * price;
-      return currentBalance >= tradeAmount;
-    }
-    return true;
-  }
-
-  double calculateTradeAmount(double quantity, double price) {
-    return quantity * price;
-  }
-
-  void simulateTrade(String type, String symbol, double quantity, double price) {
-    final tradeAmount = calculateTradeAmount(quantity, price);
-
-    if (type.toUpperCase() == 'BUY' || type.toUpperCase() == 'buy') {
-      currentBalance -= tradeAmount;
-      _cumulativePurchases += tradeAmount;
-
-      final existingHoldingIndex = holdings.indexWhere((h) => h.symbol == symbol);
-
-      if (existingHoldingIndex >= 0) {
-        final existingHolding = holdings[existingHoldingIndex];
-        final newQuantity = existingHolding.quantity + quantity;
-        final newAvgPrice = ((existingHolding.quantity * existingHolding.averageBuyPrice) + (quantity * price)) / newQuantity;
-
-        holdings[existingHoldingIndex] = PaperHolding(
-          id: existingHolding.id,
-          symbol: symbol,
-          companyName: existingHolding.companyName,
-          quantity: newQuantity,
-          averageBuyPrice: newAvgPrice,
-          buyPrice: existingHolding.buyPrice,
-          currentPrice: existingHolding.currentPrice,
-        );
-      } else {
-        holdings.add(PaperHolding(
-          id: DateTime.now().millisecondsSinceEpoch,
-          symbol: symbol,
-          quantity: quantity,
-          averageBuyPrice: price,
-          buyPrice: price,
-        ));
-      }
-    } else if (type.toUpperCase() == 'SELL' || type.toUpperCase() == 'sell') {
-      currentBalance += tradeAmount;
-
-      final existingHoldingIndex = holdings.indexWhere((h) => h.symbol == symbol);
-
-      if (existingHoldingIndex >= 0) {
-        final existingHolding = holdings[existingHoldingIndex];
-        final newQuantity = existingHolding.quantity - quantity;
-
-        if (newQuantity <= 0) {
-          holdings.removeAt(existingHoldingIndex);
-        } else {
-          holdings[existingHoldingIndex] = PaperHolding(
-            id: existingHolding.id,
-            symbol: symbol,
-            companyName: existingHolding.companyName,
-            quantity: newQuantity,
-            averageBuyPrice: existingHolding.averageBuyPrice,
-            buyPrice: existingHolding.buyPrice,
-            currentPrice: existingHolding.currentPrice,
-          );
-        }
-      }
-    }
-
-    final newTrade = PaperTrade(
-      id: DateTime.now().millisecondsSinceEpoch,
-      portfolioId: id,
-      symbol: symbol,
-      type: type.toUpperCase(),
-      quantity: quantity,
-      price: price,
-      totalAmount: tradeAmount,
-      tradeDate: DateTime.now(),
-      createdAt: DateTime.now(),
-      timestamp: DateTime.now(),
-    );
-
-    paperTrades.add(newTrade);
+    // Calculate ROI based on the portfolio initial balance
+    if (initialBalance <= 0) return 0.0;
+    
+    // Calculate the total value change compared to initial investment
+    final totalValueChange = portfolioValue - initialBalance;
+    return (totalValueChange / initialBalance) * 100;
   }
 
   List<PaperTrade> get paperTrades => _paperTrades;
@@ -154,97 +71,46 @@ class PaperPortfolio {
   }
 
   factory PaperPortfolio.fromJson(Map<String, dynamic> json) {
-    try {
-      int id;
-      if (json['id'] is int) {
-        id = json['id'];
-      } else if (json['id'] is String) {
-        id = int.tryParse(json['id']) ?? 0;
-      } else {
-        id = 0;
-      }
-
-      final name = json['name'] as String? ?? "Unnamed Portfolio";
-      final description = json['description'] as String?;
-
-      final initialBalance = _parseDouble(json['initial_balance'] ?? json['initialBalance'] ?? 150000.0);
-      final currentBalance = _parseDouble(json['current_balance'] ?? json['currentBalance'] ?? initialBalance);
-
-      List<PaperHolding> holdingsList = [];
-      if (json['holdings'] != null) {
-        try {
-          holdingsList = (json['holdings'] as List)
-              .map((holding) => holding is Map ? PaperHolding.fromJson(holding.cast<String, dynamic>()) : PaperHolding(
-                id: 0,
-                symbol: "Unknown", 
-                quantity: 0,
-                averageBuyPrice: 0,
-                buyPrice: 0
-              ))
-              .toList();
-        } catch (e) {
-          print('Error parsing holdings: $e');
+    // Parse finance values with strict numeric validation
+    double parseFinanceValue(dynamic value, double defaultValue) {
+      if (value == null) return defaultValue;
+      
+      // Handle numeric values directly
+      if (value is num) return value.toDouble();
+      
+      // Handle string values by parsing
+      if (value is String) {
+        if (value.isEmpty || value == 'null' || value == 'undefined' || value == 'NaN') {
+          return defaultValue;
         }
+        
+        final parsed = double.tryParse(value);
+        if (parsed != null) return parsed;
       }
-
-      List<PaperTrade> tradesList = [];
-      if (json['trades'] != null) {
-        try {
-          tradesList = (json['trades'] as List)
-              .map((trade) => trade is Map ? PaperTrade.fromJson(trade.cast<String, dynamic>()) : PaperTrade(
-                id: 0,
-                portfolioId: id,
-                symbol: "Unknown",
-                type: "BUY",
-                quantity: 0,
-                price: 0,
-                tradeDate: DateTime.now(),
-                totalAmount: 0,
-                createdAt: DateTime.now(),
-                timestamp: DateTime.now(),
-              ))
-              .toList();
-        } catch (e) {
-          print('Error parsing trades: $e');
-        }
-      }
-
-      final cumulativePurchases = _parseDouble(json['cumulative_purchases'] ?? json['cumulativePurchases'] ?? 0.0);
-
-      return PaperPortfolio(
-        id: id,
-        name: name,
-        description: description,
-        initialBalance: initialBalance,
-        currentBalance: currentBalance,
-        holdings: holdingsList,
-        paperTrades: tradesList,
-      )..cumulativePurchases = cumulativePurchases;
-    } catch (e) {
-      print('Error in PaperPortfolio.fromJson: $e');
-      return PaperPortfolio(
-        id: 1,
-        name: "Error Portfolio",
-        description: "Failed to parse portfolio data",
-        initialBalance: 150000.0,
-        currentBalance: 150000.0,
-        holdings: [],
-      );
+      
+      // Default case
+      return defaultValue;
     }
-  }
-
-  static double _parseDouble(dynamic value) {
-    if (value == null) return 0.0;
-    if (value is int) return value.toDouble();
-    if (value is double) return value;
-    if (value is String) {
-      try {
-        return double.parse(value);
-      } catch (_) {
-        return 0.0;
-      }
-    }
-    return 0.0;
+    
+    // Apply strict parsing for balance values
+    final currentBalance = parseFinanceValue(json['current_balance'], 150000.0);
+    final initialBalance = parseFinanceValue(json['initial_balance'], 150000.0);
+    final cumulativePurchases = parseFinanceValue(json['cumulative_purchases'], 0.0);
+    
+    return PaperPortfolio(
+      id: json['id'] is String ? int.parse(json['id']) : json['id'],
+      name: json['name'] ?? 'Paper Portfolio',
+      description: json['description'],
+      initialBalance: initialBalance,
+      currentBalance: currentBalance,
+      cumulativePurchases: cumulativePurchases,
+      holdings: json['holdings'] != null 
+          ? (json['holdings'] as List).map((h) => PaperHolding.fromJson(h)).toList()
+          : [],
+      paperTrades: json['trades'] != null
+          ? (json['trades'] as List).map((t) => PaperTrade.fromJson(t)).toList()
+          : [],
+    );
   }
 
   Map<String, dynamic> toJson() {
@@ -255,7 +121,6 @@ class PaperPortfolio {
       'initial_balance': initialBalance,
       'current_balance': currentBalance,
       'holdings': holdings.map((holding) => holding.toJson()).toList(),
-      'trades': paperTrades.map((trade) => trade is Map ? trade : trade.toJson()).toList(),
       'total_market_value': _totalMarketValue,
       'total_investment': _totalInvestment,
       'total_profit': _totalProfit,
@@ -305,9 +170,7 @@ class PaperHolding {
   }
 
   double get investmentValue => quantity * averageBuyPrice;
-
   double get calculatedCurrentValue => quantity * (currentPrice ?? averageBuyPrice);
-
   double get profit => currentValue - investmentValue;
 
   double get profitPercentage {
@@ -316,14 +179,28 @@ class PaperHolding {
   }
 
   factory PaperHolding.fromJson(Map<String, dynamic> json) {
+    // Helper function to safely parse doubles
+    double parseDouble(dynamic value) {
+      if (value == null) return 0.0;
+      if (value is num) return value.toDouble();
+      if (value is String) {
+        try {
+          return double.parse(value);
+        } catch (_) {
+          return 0.0;
+        }
+      }
+      return 0.0;
+    }
+    
     return PaperHolding(
-      id: json['id'],
-      symbol: json['symbol'],
+      id: json['id'] is String ? int.parse(json['id']) : (json['id'] ?? 0),
+      symbol: json['symbol'] ?? '',
       companyName: json['company_name'],
-      quantity: _parseDouble(json['quantity']),
-      averageBuyPrice: _parseDouble(json['average_buy_price']),
-      currentPrice: _parseDouble(json['current_price']),
-      buyPrice: _parseDouble(json['buy_price']),
+      quantity: parseDouble(json['quantity']),
+      averageBuyPrice: parseDouble(json['average_buy_price']),
+      currentPrice: parseDouble(json['current_price']),
+      buyPrice: parseDouble(json['buy_price']),
     );
   }
 
@@ -335,20 +212,7 @@ class PaperHolding {
       'quantity': quantity,
       'average_buy_price': averageBuyPrice,
       'current_price': currentPrice,
+      'buy_price': buyPrice,
     };
-  }
-
-  static double _parseDouble(dynamic value) {
-    if (value == null) return 0.0;
-    if (value is int) return value.toDouble();
-    if (value is double) return value;
-    if (value is String) {
-      try {
-        return double.parse(value);
-      } catch (_) {
-        return 0.0;
-      }
-    }
-    return 0.0;
   }
 }

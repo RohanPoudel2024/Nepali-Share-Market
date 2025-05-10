@@ -36,10 +36,6 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
   bool _isLoadingStockData = false;
   List<FlSpot> _pricePoints = [];
   
-  // Order book simulation data
-  List<Map<String, dynamic>> _buyOrders = [];
-  List<Map<String, dynamic>> _sellOrders = [];
-  
   @override
   void initState() {
     super.initState();
@@ -47,15 +43,16 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
     _quantityController = TextEditingController();
     _priceController = TextEditingController();
     
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Force refresh at startup to ensure we have latest data
+      final provider = Provider.of<PaperTradingProvider>(context, listen: false);
+      await provider.forcePaperPortfolioRefresh(widget.portfolioId);
+      
       _loadSymbols();
       
       if (widget.preSelectedSymbol != null) {
         _loadStockData(widget.preSelectedSymbol!);
       }
-      
-      // Start simulated price updates
-      _simulatePriceUpdates();
     });
   }
   
@@ -65,61 +62,6 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
     _quantityController.dispose();
     _priceController.dispose();
     super.dispose();
-  }
-  
-  // Simulate real-time price updates
-  void _simulatePriceUpdates() {
-    Future.delayed(Duration(seconds: 2), () {
-      if (!mounted) return;
-      
-      if (_stockData != null && _stockData!['currentPrice'] != null) {
-        setState(() {
-          // Randomly tick the price up or down slightly
-          final currentPrice = _stockData!['currentPrice'] as double;
-          final change = (currentPrice * 0.0005) * (DateTime.now().second % 2 == 0 ? 1 : -1);
-          _stockData!['currentPrice'] = currentPrice + change;
-          _lastPriceUpdate = DateTime.now();
-          
-          // Update price field if using current price
-          if (_useCurrentPrice) {
-            _priceController.text = _stockData!['currentPrice'].toString();
-          }
-          
-          // Update chart with new point
-          if (_pricePoints.isNotEmpty) {
-            final newSpot = FlSpot(_pricePoints.last.x + 0.1, currentPrice + change);
-            _pricePoints = [..._pricePoints.skipWhile((spot) => spot.x < newSpot.x - 10), newSpot];
-          }
-          
-          // Update order book
-          _updateSimulatedOrderBook(currentPrice + change);
-        });
-      }
-      
-      // Continue simulation if still on screen
-      _simulatePriceUpdates();
-    });
-  }
-  
-  void _updateSimulatedOrderBook(double currentPrice) {
-    // Generate realistic order book
-    _buyOrders = List.generate(5, (i) {
-      final priceDiff = (i + 1) * 0.5;
-      final price = currentPrice - priceDiff;
-      return {
-        'price': price,
-        'quantity': (200 - (i * 25) + (DateTime.now().millisecond % 100)).toDouble(),
-      };
-    });
-    
-    _sellOrders = List.generate(5, (i) {
-      final priceDiff = (i + 1) * 0.5;
-      final price = currentPrice + priceDiff;
-      return {
-        'price': price,
-        'quantity': (150 - (i * 20) + (DateTime.now().millisecond % 50)).toDouble(),
-      };
-    });
   }
 
   Future<void> _loadSymbols() async {
@@ -143,7 +85,6 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
     setState(() {
       _isLoadingStockData = true;
       _stockData = null;
-      _pricePoints = [];
     });
     
     try {
@@ -155,58 +96,16 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
         _priceController.text = currentPrice.toString();
       }
       
-      // Load historical data if available
-      await marketProvider.loadStockHistoricalData(symbol);
-      
       if (!mounted) return;
       
-      final historicalData = marketProvider.getStockHistoricalData(symbol);
-      if (historicalData != null && historicalData.isNotEmpty) {
-        // Convert historical data to chart points
-        final points = <FlSpot>[];
-        for (int i = 0; i < historicalData.length && i < 30; i++) {
-          points.add(FlSpot(i.toDouble(), double.parse(historicalData[i]['close'].toString())));
-        }
-        
-        setState(() {
-          _stockData = {
-            'symbol': symbol,
-            'data': historicalData,
-            'currentPrice': currentPrice,
-          };
-          _pricePoints = points;
-          _isLoadingStockData = false;
-          
-          // Initialize order book with the current price
-          if (currentPrice != null) {
-            _updateSimulatedOrderBook(currentPrice);
-          }
-        });
-      } else {
-        // If no historical data, create a simple chart with the current price
-        if (currentPrice != null) {
-          setState(() {
-            _stockData = {
-              'symbol': symbol,
-              'currentPrice': currentPrice,
-            };
-            _pricePoints = List.generate(10, (i) {
-              // Generate slightly realistic price movement
-              final basePrice = currentPrice;
-              final change = (i % 3 == 0 ? 1 : -1) * (i / 20.0) * basePrice * 0.01;
-              return FlSpot(i.toDouble(), basePrice + change);
-            });
-            _isLoadingStockData = false;
-            
-            // Initialize order book with the current price
-            _updateSimulatedOrderBook(currentPrice);
-          });
-        } else {
-          setState(() {
-            _isLoadingStockData = false;
-          });
-        }
-      }
+      // Simplified stock data without historical chart
+      setState(() {
+        _stockData = {
+          'symbol': symbol,
+          'currentPrice': currentPrice ?? 0.0,
+        };
+        _isLoadingStockData = false;
+      });
     } catch (e) {
       if (!mounted) return;
       
@@ -219,8 +118,21 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
     }
   }
 
+  double _calculateTradeTotal() {
+    try {
+      final quantity = double.tryParse(_quantityController.text) ?? 0;
+      final price = double.tryParse(_priceController.text) ?? 0;
+      
+      // Use proper rounding to avoid floating point errors
+      return (quantity * price * 100).round() / 100;
+    } catch (e) {
+      print('Error calculating trade total: $e');
+      return 0;
+    }
+  }
+
   Future<void> _executeTrade() async {
-    if (!_formKey.currentState!.validate()) {
+    if (_formKey.currentState == null || !_formKey.currentState!.validate()) {
       return;
     }
     
@@ -229,15 +141,50 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
       _errorMessage = null;
     });
     
-    final symbol = _symbolController.text.trim().toUpperCase();
-    final quantity = double.parse(_quantityController.text);
-    final price = _useCurrentPrice ? null : double.parse(_priceController.text);
-    
     try {
       final paperTradingProvider = Provider.of<PaperTradingProvider>(context, listen: false);
+      
+      // Verify the portfolio has a valid balance
+      final portfolio = paperTradingProvider.getPortfolio(widget.portfolioId);
+      
+      // CRITICAL FIX: Check for valid balance before executing trade
+      if (portfolio.currentBalance.isNaN || 
+          portfolio.currentBalance.isInfinite ||
+          portfolio.currentBalance < 0) {
+        // Portfolio has invalid balance, try to fix it
+        final repaired = await paperTradingProvider.fixBalanceIssue(widget.portfolioId);
+        
+        if (!repaired) {
+          setState(() {
+            _errorMessage = 'Portfolio has invalid balance. Please try again later.';
+            _isExecuting = false;
+          });
+          return;
+        }
+      }
+      
+      // Proceed with trade using VALIDATED numbers only
+      final quantity = double.tryParse(_quantityController.text) ?? 0;
+      if (quantity <= 0) {
+        setState(() {
+          _errorMessage = 'Please enter a valid quantity';
+          _isExecuting = false;
+        });
+        return;
+      }
+      
+      final price = double.tryParse(_priceController.text) ?? 0;
+      if (price <= 0) {
+        setState(() {
+          _errorMessage = 'Please enter a valid price';
+          _isExecuting = false;
+        });
+        return;
+      }
+      
       final success = await paperTradingProvider.executePaperTrade(
         widget.portfolioId,
-        symbol,
+        _symbolController.text.trim(),
         _selectedType,
         quantity,
         price,
@@ -245,9 +192,16 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
       
       if (!mounted) return;
       
+      // After successful trade execution
       if (success) {
         // Ensure data is refreshed before returning
-        await Future.delayed(Duration(milliseconds: 500));
+        setState(() {
+          _errorMessage = 'Trade successful! Refreshing portfolio...';
+        });
+        
+        // Force a fresh reload of data from server
+        await paperTradingProvider.forcePaperPortfolioRefresh(widget.portfolioId);
+        
         Navigator.pop(context, true);
       } else {
         final errorMessage = paperTradingProvider.errorMessage;
@@ -346,92 +300,115 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
     );
   }
   
-  double _calculateTradeTotal() {
-    try {
-      final quantity = double.tryParse(_quantityController.text) ?? 0;
-      final price = double.tryParse(_priceController.text) ?? 0;
-      return quantity * price;
-    } catch (_) {
-      return 0;
-    }
-  }
-  
   Widget _buildBalanceSummary(dynamic portfolio, double tradeTotal) {
     final formatter = NumberFormat("#,##0.00", "en_US");
     final isBuy = _selectedType == 'Buy';
     final remainingBalance = isBuy 
-        ? portfolio.currentBalance - tradeTotal 
-        : portfolio.currentBalance + tradeTotal;
+        ? (portfolio.currentBalance - tradeTotal)
+        : (portfolio.currentBalance + tradeTotal);
     
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Trade Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        SizedBox(height: 8),
-        Container(
-          padding: EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Current Balance:'),
-                  Text(
-                    'Rs. ${formatter.format(portfolio.currentBalance)}',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ],
+    // Show warning if buy order would result in negative balance
+    final isInsufficientFunds = isBuy && remainingBalance < 0;
+    
+    return Card(
+      elevation: 2,
+      margin: EdgeInsets.only(top: 16, bottom: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: isInsufficientFunds 
+          ? BorderSide(color: Colors.red, width: 1)
+          : BorderSide.none,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Trade Summary',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
               ),
-              SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Trade Amount:'),
-                  Text(
-                    'Rs. ${formatter.format(tradeTotal)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: isBuy ? Colors.red[700] : Colors.green[700],
+            ),
+            SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Current Balance:'),
+                Text(
+                  'Rs. ${formatter.format(portfolio.currentBalance)}',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            Divider(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Trade Amount:'),
+                Text(
+                  'Rs. ${formatter.format(tradeTotal)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isBuy ? Colors.red[700] : Colors.green[700],
+                  ),
+                ),
+              ],
+            ),
+            Divider(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Balance After Trade:'),
+                Text(
+                  'Rs. ${formatter.format(remainingBalance)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: remainingBalance >= 0 ? Colors.green[700] : Colors.red[700],
+                  ),
+                ),
+              ],
+            ),
+            
+            // Show warning if insufficient funds
+            if (isInsufficientFunds)
+              Container(
+                margin: EdgeInsets.only(top: 12),
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.red[300]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.red[700], size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Insufficient funds for this trade',
+                        style: TextStyle(color: Colors.red[700]),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              Divider(),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Balance After Trade:'),
-                  Text(
-                    'Rs. ${formatter.format(remainingBalance)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: remainingBalance >= 0 ? Colors.green[700] : Colors.red[700],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
-  
+
   @override
   Widget build(BuildContext context) {
-    final paperTradingProvider = Provider.of<PaperTradingProvider>(context);
-    final portfolio = paperTradingProvider.selectedPaperPortfolio;
-    final formatter = NumberFormat("#,##0.00", "en_US");
+    final portfolio = Provider.of<PaperTradingProvider>(context).getPortfolio(widget.portfolioId);
     final tradeTotal = _calculateTradeTotal();
+    final formatter = NumberFormat("#,##0.00", "en_US");
     
     return Scaffold(
       appBar: AppBar(
-        title: Text('Execute Paper Trade'),
+        title: Text('Paper Trade Execution'),
         actions: [
           IconButton(
             icon: Icon(Icons.refresh),
@@ -517,192 +494,27 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
                                   color: Theme.of(context).primaryColor,
                                 ),
                               ),
-                              Text(
-                                'Updated: ${DateFormat('HH:mm:ss').format(_lastPriceUpdate)}',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
                             ],
                           ),
                         ],
                       ),
                       Divider(height: 24),
                       
-                      // Stock chart
-                      Container(
-                        height: 200,
-                        child: LineChart(
-                          LineChartData(
-                            gridData: FlGridData(
-                              show: true,
-                              drawVerticalLine: false,
-                              horizontalInterval: (_stockData!['currentPrice'] as double) * 0.01,
-                              getDrawingHorizontalLine: (value) {
-                                return FlLine(
-                                  color: Colors.grey.withOpacity(0.15),
-                                  strokeWidth: 1,
-                                  dashArray: [5, 5],
-                                );
-                              },
-                            ),
-                            titlesData: FlTitlesData(
-                              show: true,
-                              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              bottomTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: false,
-                                ),
-                              ),
-                              leftTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  reservedSize: 40,
-                                  getTitlesWidget: (value, meta) {
-                                    return Text(
-                                      formatter.format(value),
-                                      style: TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 10,
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                            borderData: FlBorderData(show: false),
-                            lineBarsData: [
-                              LineChartBarData(
-                                spots: _pricePoints,
-                                isCurved: true,
-                                color: Theme.of(context).primaryColor,
-                                barWidth: 3,
-                                isStrokeCapRound: true,
-                                dotData: FlDotData(show: false),
-                                belowBarData: BarAreaData(
-                                  show: true,
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Theme.of(context).primaryColor.withOpacity(0.3),
-                                      Theme.of(context).primaryColor.withOpacity(0.0),
-                                    ],
-                                    stops: [0.5, 1.0],
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            minY: _pricePoints
-                                .map((spot) => spot.y)
-                                .reduce((a, b) => a < b ? a : b) * 0.995,
-                            maxY: _pricePoints
-                                .map((spot) => spot.y)
-                                .reduce((a, b) => a > b ? a : b) * 1.005,
-                          ),
-                        ),
-                      ),
-                      
-                      // Order book section - Professional trading vibe
-                      SizedBox(height: 20),
+                      // Simple stock info instead of chart
                       Text(
-                        'Order Book',
+                        'Current Market Price',
                         style: TextStyle(
-                          fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          fontSize: 16,
                         ),
                       ),
                       SizedBox(height: 8),
-                      Row(
-                        children: [
-                          // Buy orders
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text('BUY', style: TextStyle(
-                                      color: Colors.green[700],
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    )),
-                                    Text('Qty', style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 12,
-                                    )),
-                                  ],
-                                ),
-                                Divider(height: 8),
-                                ..._buyOrders.map((order) => Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      formatter.format(order['price']),
-                                      style: TextStyle(
-                                        color: Colors.green[700],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    Text(
-                                      order['quantity'].toStringAsFixed(0),
-                                      style: TextStyle(
-                                        color: Colors.grey[800],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                )).toList(),
-                              ],
-                            ),
-                          ),
-                          SizedBox(width: 16),
-                          // Sell orders
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text('SELL', style: TextStyle(
-                                      color: Colors.red[700],
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    )),
-                                    Text('Qty', style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 12,
-                                    )),
-                                  ],
-                                ),
-                                Divider(height: 8),
-                                ..._sellOrders.map((order) => Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      formatter.format(order['price']),
-                                      style: TextStyle(
-                                        color: Colors.red[700],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    Text(
-                                      order['quantity'].toStringAsFixed(0),
-                                      style: TextStyle(
-                                        color: Colors.grey[800],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                )).toList(),
-                              ],
-                            ),
-                          ),
-                        ],
+                      Text(
+                        'Use this price for your paper trade or enter a custom price below.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
                       ),
                     ],
                   ),

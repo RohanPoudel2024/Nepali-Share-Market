@@ -5,18 +5,7 @@ const paperTradingController = {
   getUserPortfolios: async (req, res) => {
     try {
       const userId = req.user?.id; // Handle potentially undefined user
-      let portfolios = await paperTradingService.getUserPortfolios(userId);
-      
-      // If no portfolios found, create a default one
-      if (!portfolios || portfolios.length === 0) {
-        const defaultPortfolio = await paperTradingService.createPortfolio(userId, {
-          name: "Default Paper Portfolio",
-          description: "Trade with NPR 150,000 virtual money without risk!",
-          initialBalance: 150000
-        });
-        
-        portfolios = [defaultPortfolio];
-      }
+      const portfolios = await paperTradingService.getUserPortfolios(userId);
       
       return res.status(200).json({
         success: true,
@@ -25,20 +14,10 @@ const paperTradingController = {
     } catch (error) {
       console.error('Error in getUserPortfolios:', error);
       
-      // Return a successful response with an empty default portfolio
-      return res.status(200).json({
-        success: true,
-        data: [{
-          id: 1,
-          user_id: req.user?.id,
-          name: "Default Paper Portfolio",
-          description: "Trade with NPR 150,000 virtual money without risk!",
-          initial_balance: 150000,
-          current_balance: 150000,
-          created_at: new Date(),
-          updated_at: new Date(),
-          holdings: []
-        }]
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve portfolios',
+        error: error.message
       });
     }
   },
@@ -66,24 +45,10 @@ const paperTradingController = {
     } catch (error) {
       console.error('Error in getPortfolioDetails:', error);
       
-      // Return a default portfolio instead of an error
-      return res.status(200).json({
-        success: true,
-        data: {
-          id: parseInt(req.params.portfolioId),
-          user_id: req.user?.id,
-          name: "Default Paper Portfolio",
-          description: "Trade with NPR 150,000 virtual money without risk!",
-          initial_balance: 150000,
-          current_balance: 150000,
-          created_at: new Date(),
-          updated_at: new Date(),
-          holdings: [],
-          totalInvestment: 0,
-          totalMarketValue: 0,
-          totalProfit: 0,
-          profitPercentage: 0
-        }
+      return res.status(404).json({
+        success: false,
+        message: 'Portfolio not found',
+        error: error.message
       });
     }
   },
@@ -91,7 +56,7 @@ const paperTradingController = {
   // Create a new portfolio
   createPortfolio: async (req, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user?.id;
       const { name, description, initialBalance } = req.body;
       
       if (!name) {
@@ -125,19 +90,8 @@ const paperTradingController = {
   // Execute a trade
   executeTrade: async (req, res) => {
     try {
-      const userId = req.user?.id; // This may be undefined
       const { portfolioId } = req.params;
       const { symbol, type, quantity, price, companyName } = req.body;
-      
-      console.log('Trade request received:', {
-        userId,
-        portfolioId,
-        symbol,
-        type,
-        quantity,
-        price,
-        companyName
-      });
       
       // Validate required fields
       if (!symbol || !type || !quantity || !price) {
@@ -147,77 +101,20 @@ const paperTradingController = {
         });
       }
       
-      try {
-        // Try to get portfolio details - handle potential errors
-        let portfolioDetails = null;
-        try {
-          portfolioDetails = await paperTradingService.getPortfolioDetails(portfolioId);
-          
-          // Just log the current balance for debugging, don't modify it
-          console.log(`Portfolio balance before trade: ${portfolioDetails?.current_balance}`);
-        } catch (portfolioError) {
-          console.error('Error getting portfolio details:', portfolioError);
-          // Continue with execution, we'll create portfolio if needed
-          portfolioDetails = null;
-        }
-        
-        // Skip authorization checks if userId is undefined or portfolio.user_id is null
-        if (userId && portfolioDetails && portfolioDetails.user_id && portfolioDetails.user_id !== userId) {
-          console.log('Authorization failed: userId mismatch', { userId, portfolioUserId: portfolioDetails.user_id });
-          return res.status(403).json({
-            success: false,
-            message: 'You do not have permission to access this portfolio'
-          });
-        }
-        
-        // Execute the trade - all balance updates happen within the transaction
-        const trade = await paperTradingService.executeTrade(portfolioId, {
-          symbol,
-          type,
-          quantity: parseFloat(quantity),
-          price: parseFloat(price),
-          companyName
-        });
-        
-        console.log('Trade executed successfully:', trade);
-        
-        // Verify the balance after the trade
-        const updatedPortfolio = await paperTradingService.getPortfolioDetails(portfolioId);
-        console.log(`Portfolio balance after trade: ${updatedPortfolio?.current_balance}`);
-        
-        return res.status(200).json({
-          success: true,
-          message: 'Trade executed successfully',
-          data: trade
-        });
-      } catch (error) {
-        console.error('Error with portfolio:', error);
-        // Create default portfolio if not found
-        if (error.message === 'Portfolio not found') {
-          const defaultPortfolio = await paperTradingService.createPortfolio(userId, {
-            name: "Default Paper Portfolio",
-            description: "Trade with NPR 150,000 virtual money without risk!",
-            initialBalance: 150000
-          });
-          
-          // Try executing the trade again with new portfolio
-          const trade = await paperTradingService.executeTrade(defaultPortfolio.id, {
-            symbol,
-            type,
-            quantity: parseFloat(quantity),
-            price: parseFloat(price),
-            companyName
-          });
-          
-          return res.status(200).json({
-            success: true,
-            message: 'Portfolio created and trade executed successfully',
-            data: trade
-          });
-        } else {
-          throw error; // Re-throw if it's another kind of error
-        }
-      }
+      // Execute the trade
+      const trade = await paperTradingService.executeTrade(portfolioId, {
+        symbol,
+        type,
+        quantity: parseFloat(quantity),
+        price: parseFloat(price),
+        companyName
+      });
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Trade executed successfully',
+        data: trade
+      });
     } catch (error) {
       console.error('Error in executeTrade:', error);
       return res.status(400).json({
@@ -230,115 +127,42 @@ const paperTradingController = {
   // Get trade history for a portfolio
   getTradeHistory: async (req, res) => {
     try {
-      const userId = req.user?.id;  // This may be undefined
       const { portfolioId } = req.params;
       
-      console.log(`Fetching trade history for portfolio ${portfolioId}`);
-      
-      // Skip portfolio details check if it fails, to avoid blocking trade history
-      let portfolioDetails = null;
-      try {
-        portfolioDetails = await paperTradingService.getPortfolioDetails(portfolioId);
-      } catch (detailsError) {
-        console.warn(`Cannot get portfolio details: ${detailsError.message}`);
-      }
-      
-      // Only check permissions if we have both user ID and portfolio details
-      if (userId && portfolioDetails?.user_id && portfolioDetails.user_id !== userId) {
-        console.log(`User ${userId} tried to access portfolio ${portfolioId} owned by user ${portfolioDetails.user_id}`);
-        return res.status(403).json({
-          success: false,
-          message: 'You do not have permission to access this portfolio'
-        });
-      }
-      
-      // Try to get trades even if portfolio details failed
-      let trades = [];
-      try {
-        trades = await paperTradingService.getTradeHistory(portfolioId);
-        console.log(`Got ${trades.length} trades`);
-      } catch (tradesError) {
-        console.error(`Error fetching trades: ${tradesError.message}`);
-        trades = []; // Use empty array on error
-      }
+      const trades = await paperTradingService.getTradeHistory(portfolioId);
 
-      // Always return a valid response
       return res.status(200).json({
         success: true,
-        data: Array.isArray(trades) ? trades : []
+        data: trades
       });
     } catch (error) {
       console.error('Error in getTradeHistory:', error);
-      return res.status(200).json({  // Return 200 with empty data to avoid frontend errors
-        success: true,
-        data: []
-      });
-    }
-  },
-
-  // Reset portfolio balance
-  resetPortfolioBalance: async (req, res) => {
-    try {
-      const { portfolioId } = req.params;
-      const { balance } = req.body;
-      
-      console.log(`Request to reset portfolio ${portfolioId} balance to ${balance}`);
-      
-      if (!balance) {
-        return res.status(400).json({
-          success: false,
-          message: 'Balance is required'
-        });
-      }
-      
-      const parsedBalance = parseFloat(balance);
-      if (isNaN(parsedBalance)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Balance must be a valid number'
-        });
-      }
-      
-      // Update the portfolio balance
-      const updatedPortfolio = await paperTradingService.updatePortfolioBalance(
-        portfolioId, 
-        parsedBalance
-      );
-      
-      return res.status(200).json({
-        success: true,
-        message: 'Portfolio balance updated successfully',
-        data: updatedPortfolio
-      });
-    } catch (error) {
-      console.error('Error in resetPortfolioBalance:', error);
       return res.status(500).json({
         success: false,
-        message: 'Failed to update portfolio balance',
+        message: 'Failed to retrieve trade history',
         error: error.message
       });
     }
   },
 
-  // Add this new method for fixing portfolio balances
+  // Fix portfolio balance
   fixPortfolioBalance: async (req, res) => {
     try {
       const { portfolioId } = req.params;
-      console.log(`Request to fix balance for portfolio ${portfolioId}`);
       
-      // Attempt to diagnose and fix the balance
-      const result = await paperTradingService.diagnoseAndFixBalance(portfolioId);
+      const updatedPortfolio = await paperTradingService.fixPortfolioBalance(portfolioId);
       
       return res.status(200).json({
         success: true,
-        message: `Portfolio balance fixed from ${result.original} to ${result.fixed}`,
-        data: result.portfolio
+        message: 'Portfolio balance fixed successfully',
+        data: updatedPortfolio
       });
     } catch (error) {
       console.error('Error fixing portfolio balance:', error);
       return res.status(500).json({
         success: false,
-        message: `Failed to fix portfolio balance: ${error.message}`
+        message: 'Failed to fix portfolio balance',
+        error: error.message
       });
     }
   }

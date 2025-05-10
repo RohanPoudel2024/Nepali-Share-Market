@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:your_app/providers/paper_trading_provider.dart';
+import 'package:nepse_market_app/providers/paper_trading_provider.dart';
 
 class PaperPortfolioScreen extends StatefulWidget {
   final String portfolioId;
@@ -53,7 +53,7 @@ class _PaperPortfolioScreenState extends State<PaperPortfolioScreen> {
                 foregroundColor: Colors.white,
               ),
               onPressed: provider.isLoading ? null : () async {
-                final success = await provider.fixBalanceIssue(widget.portfolioId);
+                final success = await provider.fixBalanceIssue(int.parse(widget.portfolioId));
                 
                 if (success && mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -78,6 +78,33 @@ class _PaperPortfolioScreenState extends State<PaperPortfolioScreen> {
     );
   }
 
+  AppBar _buildAppBar(PaperTradingProvider provider) {
+    return AppBar(
+      title: Text('Paper Portfolio'),
+      actions: [
+        // Add a refresh button
+        IconButton(
+          icon: Icon(Icons.refresh),
+          onPressed: provider.isLoading ? null : () async {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Refreshing portfolio data...'))
+            );
+            await provider.forcePaperPortfolioRefresh(int.parse(widget.portfolioId));
+          },
+          tooltip: 'Refresh Portfolio Data',
+        ),
+        PopupMenuButton<String>(
+          onSelected: (value) {
+            // Your existing menu handlers
+          },
+          itemBuilder: (context) => [
+            // Your existing menu items
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<PaperTradingProvider>(
@@ -91,9 +118,7 @@ class _PaperPortfolioScreenState extends State<PaperPortfolioScreen> {
         }
 
         return Scaffold(
-          appBar: AppBar(
-            title: Text('Paper Portfolio'),
-          ),
+          appBar: _buildAppBar(provider),
           body: ListView(
             children: children,
           ),
