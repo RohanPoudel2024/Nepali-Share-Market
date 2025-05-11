@@ -65,78 +65,83 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final marketProvider = Provider.of<MarketProvider>(context);
     final authProvider = Provider.of<AuthProvider>(context);
-    
     return Scaffold(
+      backgroundColor: Color(0xFFF7F5FA),
       appBar: AppBar(
-        title: const Text('NEPSE Market App'),
-        backgroundColor: Theme.of(context).primaryColor,
+        backgroundColor: Colors.white,
         elevation: 0,
+        title: Row(
+          children: [
+            Text('Namaste, ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w500, fontSize: 18)),
+            Text('NEPSE User!', style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        centerTitle: false,
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh),
-            onPressed: () {
-              marketProvider.loadAllMarketData();
-            },
-            tooltip: 'Refresh Market Data',
+            icon: Icon(Icons.search, color: Colors.grey[800]),
+            tooltip: 'Search',
+            onPressed: () {},
           ),
           IconButton(
-            icon: Icon(Icons.person),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => ProfileScreen()),
-              );
-            },
-            tooltip: 'Profile',
+            icon: Icon(Icons.notifications_none, color: Colors.grey[800]),
+            tooltip: 'Notifications',
+            onPressed: () {},
           ),
-          PopupMenuButton<String>(
-            onSelected: (value) async {
-              if (value == 'logout') {
-                // Show confirmation dialog
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text('Confirm Logout'),
-                    content: Text('Are you sure you want to log out?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                        },
-                        child: Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () async {
-                          Navigator.of(context).pop();
-                          await authProvider.logout();
-                          Navigator.of(context).pushAndRemoveUntil(
-                            MaterialPageRoute(builder: (context) => LoginScreen()),
-                            (route) => false,
-                          );
-                        },
-                        child: Text('Logout'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.red,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
+          GestureDetector(
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(builder: (context) => ProfileScreen()));
             },
-            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-              const PopupMenuItem<String>(
-                value: 'logout',
-                child: ListTile(
-                  leading: Icon(Icons.logout, color: Colors.red),
-                  title: Text('Logout', style: TextStyle(color: Colors.red)),
-                  contentPadding: EdgeInsets.zero,
-                ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0),
+              child: CircleAvatar(
+                radius: 16,
+                backgroundColor: Colors.grey[300],
+                child: Icon(Icons.person, color: Colors.grey[700]),
               ),
-            ],
+            ),
           ),
         ],
       ),
-      body: _screens[_currentTabIndex],
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(child: SizedBox(height: 8)),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: _buildHeroSection(context, marketProvider),
+            ),
+          ),
+          SliverToBoxAdapter(child: SizedBox(height: 18)),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: _buildQuickActions(context),
+            ),
+          ),
+          SliverToBoxAdapter(child: SizedBox(height: 18)),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                children: [
+                  Icon(Icons.trending_up, color: Colors.green[700], size: 20),
+                  SizedBox(width: 6),
+                  Text('Market Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                ],
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(child: SizedBox(height: 10)),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: _buildMarketSummary(context, marketProvider),
+            ),
+          ),
+          SliverToBoxAdapter(child: SizedBox(height: 18)),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentTabIndex,
         onTap: (index) {
@@ -144,15 +149,449 @@ class _HomeScreenState extends State<HomeScreen> {
             _currentTabIndex = index;
           });
         },
+        backgroundColor: Colors.white,
+        selectedItemColor: Theme.of(context).primaryColor,
+        unselectedItemColor: Colors.grey[500],
+        elevation: 8,
         items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home),
+            icon: Icon(Icons.show_chart),
             label: 'Market',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance),
-            label: 'Paper Trading',
+            icon: Icon(Icons.account_balance_wallet),
+            label: 'Portfolio',
           ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.grid_view),
+            label: 'Tools',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroSection(BuildContext context, MarketProvider marketProvider) {
+    // Use NEPSE index as default
+    final indices = marketProvider.indices;
+    final selectedIndexData = indices.firstWhere(
+      (index) => index['name'] == _selectedIndex,
+      orElse: () => indices.isNotEmpty ? indices.first : {'name': 'NEPSE', 'value': 0.0, 'change': 0.0, 'percentChange': 0.0},
+    );
+    final indexValue = (selectedIndexData['value'] ?? 0.0).toDouble();
+    final indexChange = (selectedIndexData['change'] ?? 0.0).toDouble();
+    final percentChange = (selectedIndexData['percentChange'] ?? 0.0).toDouble();
+    final isPositive = percentChange >= 0;
+    final uniqueIndices = indices.map((e) => e['name'].toString()).toSet().toList();
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      elevation: 4,
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('NEPSE Index', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: uniqueIndices.contains(_selectedIndex) ? _selectedIndex : uniqueIndices.first,
+                    items: uniqueIndices.map((name) => DropdownMenuItem(
+                      value: name,
+                      child: Text(name, style: TextStyle(fontWeight: FontWeight.w500)),
+                    )).toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _selectedIndex = val);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 18),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(indexValue.toStringAsFixed(2), style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold)),
+                SizedBox(width: 12),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isPositive ? Colors.green.withOpacity(0.12) : Colors.red.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(isPositive ? Icons.arrow_upward : Icons.arrow_downward, color: isPositive ? Colors.green : Colors.red, size: 18),
+                      SizedBox(width: 4),
+                      Text(
+                        '${percentChange.toStringAsFixed(2)}% (${indexChange.toStringAsFixed(2)})',
+                        style: TextStyle(
+                          color: isPositive ? Colors.green : Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 18),
+            SizedBox(
+              height: 60,
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(show: false),
+                  titlesData: FlTitlesData(show: false),
+                  borderData: FlBorderData(show: false),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: [
+                        FlSpot(0, 2),
+                        FlSpot(1, 1),
+                        FlSpot(2, 3),
+                        FlSpot(3, 2.5),
+                        FlSpot(4, 3.5),
+                        FlSpot(5, 3),
+                        FlSpot(6, isPositive ? 4 : 2),
+                      ],
+                      isCurved: true,
+                      color: isPositive ? Colors.green : Colors.red,
+                      barWidth: 3,
+                      dotData: FlDotData(show: false),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: (isPositive ? Colors.green : Colors.red).withOpacity(0.08),
+                      ),
+                    ),
+                  ],
+                  lineTouchData: LineTouchData(enabled: false),
+                ),
+              ),
+            ),
+            SizedBox(height: 8),
+            Text('Last updated: ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActions(BuildContext context) {
+    final actions = [
+      {'icon': Icons.account_balance_wallet, 'label': 'Portfolio', 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => PortfolioListScreen()))},
+      {'icon': Icons.show_chart, 'label': 'Paper Trading', 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => PaperTradingScreen()))},
+      {'icon': Icons.trending_up, 'label': 'Live Trading', 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveTradingScreen()))},
+      {'icon': Icons.calculate, 'label': 'Calculator', 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShareCalculatorScreen()))},
+      {'icon': Icons.how_to_vote, 'label': 'IPO Results', 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => IpoResultScreen()))},
+      {'icon': Icons.calendar_today, 'label': 'Calendar', 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => MarketCalendarScreen()))},
+      {'icon': Icons.business, 'label': 'Broker Info', 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BrokerInfoScreen()))},
+      {'icon': Icons.article, 'label': 'News', 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NewsUpdatesScreen()))},
+    ];
+    return SizedBox(
+      height: 90,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: actions.length,
+        separatorBuilder: (_, __) => SizedBox(width: 16),
+        itemBuilder: (context, i) {
+          final a = actions[i];
+          return GestureDetector(
+            onTap: a['onTap'] as void Function()?,
+            child: Column(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.06),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  padding: EdgeInsets.all(16),
+                  child: Icon(a['icon'] as IconData, color: Theme.of(context).primaryColor, size: 28),
+                ),
+                SizedBox(height: 8),
+                Text(a['label'] as String, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildMarketSummary(BuildContext context, MarketProvider marketProvider) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: _buildTopGainersSection(context, marketProvider)),
+        SizedBox(width: 16),
+        Expanded(child: _buildTopLosersSection(context, marketProvider)),
+      ],
+    );
+  }
+
+  Widget _buildTopGainersSection(BuildContext context, MarketProvider marketProvider) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Color(0xFFF7F5FA),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Top Gainers',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green[700],
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                padding: EdgeInsets.all(6),
+                child: Icon(Icons.arrow_upward, color: Colors.green, size: 18),
+              ),
+            ],
+          ),
+          SizedBox(height: 10),
+          marketProvider.isLoadingGainers
+              ? Center(
+                  child: SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                    ),
+                  ),
+                )
+              : marketProvider.gainers.isEmpty
+                  ? Center(child: Text('No data available', style: TextStyle(fontSize: 12)))
+                  : Column(
+                      children: marketProvider.gainers
+                          .take(5)
+                          .map((stock) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => CompanyDetailsScreen(
+                                          symbol: stock.symbol,
+                                          companyName: stock.companyName,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.7),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              stock.symbol,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                                color: Colors.black,
+                                              ),
+                                            ),
+                                            SizedBox(height: 1),
+                                            Text(
+                                              'Rs. ${stock.ltp.toStringAsFixed(2)}',
+                                              style: TextStyle(
+                                                color: Colors.grey[700],
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.withOpacity(0.13),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          child: Text(
+                                            '+${stock.changePercent.toStringAsFixed(2)}%',
+                                            style: TextStyle(
+                                              color: Colors.green[700],
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ))
+                          .toList(),
+                    ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopLosersSection(BuildContext context, MarketProvider marketProvider) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Color(0xFFF7F5FA),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Top Losers',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red[700],
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                padding: EdgeInsets.all(6),
+                child: Icon(Icons.arrow_downward, color: Colors.red, size: 18),
+              ),
+            ],
+          ),
+          SizedBox(height: 10),
+          marketProvider.isLoadingLosers
+              ? Center(
+                  child: SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+                    ),
+                  ),
+                )
+              : marketProvider.losers.isEmpty
+                  ? Center(child: Text('No data available', style: TextStyle(fontSize: 12)))
+                  : Column(
+                      children: marketProvider.losers
+                          .take(5)
+                          .map((stock) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => CompanyDetailsScreen(
+                                          symbol: stock.symbol,
+                                          companyName: stock.companyName,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.7),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              stock.symbol,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                                color: Colors.black,
+                                              ),
+                                            ),
+                                            SizedBox(height: 1),
+                                            Text(
+                                              'Rs. ${stock.ltp.toStringAsFixed(2)}',
+                                              style: TextStyle(
+                                                color: Colors.grey[700],
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.red.withOpacity(0.13),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          child: Text(
+                                            '${stock.changePercent.toStringAsFixed(2)}%',
+                                            style: TextStyle(
+                                              color: Colors.red[700],
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ))
+                          .toList(),
+                    ),
         ],
       ),
     );
@@ -290,20 +729,21 @@ class HomeScreenContent extends StatelessWidget {
         gradient: LinearGradient(
           colors: [
             Theme.of(context).primaryColor,
-            Theme.of(context).primaryColor.withOpacity(0.7),
+            Theme.of(context).primaryColor.withOpacity(0.8),
+            Theme.of(context).primaryColor.withOpacity(0.6),
           ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(20),
-          bottomRight: Radius.circular(20),
+          bottomLeft: Radius.circular(30),
+          bottomRight: Radius.circular(30),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: Offset(0, 5),
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 15,
+            offset: Offset(0, 8),
           ),
         ],
       ),
@@ -316,42 +756,48 @@ class HomeScreenContent extends StatelessWidget {
               Text(
                 'Market Overview',
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
                   color: Colors.white,
+                  letterSpacing: 0.5,
                 ),
               ),
-              // Only show dropdown if we have indices to show
               uniqueIndices.isEmpty
               ? Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(25),
                   ),
                   child: Text(
                     'Loading...',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 )
               : Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(25),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
-                      // Ensure we have a valid value for the dropdown
                       value: uniqueIndices.contains(effectiveSelectedIndex) ? 
                         effectiveSelectedIndex : uniqueIndices.first,
-                      dropdownColor: Theme.of(context).primaryColor.withOpacity(0.9),
-                      style: TextStyle(color: Colors.white),
+                      dropdownColor: Theme.of(context).primaryColor.withOpacity(0.95),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 16,
+                      ),
                       icon: Icon(Icons.keyboard_arrow_down, color: Colors.white),
                       items: uniqueIndices.map((indexName) {
                         return DropdownMenuItem<String>(
                           value: indexName,
-                          child: Text(indexName, style: TextStyle(color: Colors.white)),
+                          child: Text(indexName),
                         );
                       }).toList(),
                       onChanged: (newValue) {
@@ -364,7 +810,7 @@ class HomeScreenContent extends StatelessWidget {
                 ),
             ],
           ),
-          SizedBox(height: 20),
+          SizedBox(height: 24),
           marketProvider.isLoadingIndices
               ? Center(
                   child: CircularProgressIndicator(
@@ -380,24 +826,32 @@ class HomeScreenContent extends StatelessWidget {
                         Text(
                           indexValue.toStringAsFixed(2),
                           style: TextStyle(
-                            fontSize: 36,
+                            fontSize: 42,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
+                            letterSpacing: -0.5,
                           ),
                         ),
                         SizedBox(width: 16),
                         Container(
-                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
                             color: isPositive ? Colors.green[700] : Colors.red[700],
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (isPositive ? Colors.green : Colors.red).withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
                           ),
                           child: Row(
                             children: [
                               Icon(
                                 isPositive ? Icons.arrow_upward : Icons.arrow_downward,
                                 color: Colors.white,
-                                size: 16,
+                                size: 18,
                               ),
                               SizedBox(width: 4),
                               Text(
@@ -405,6 +859,7 @@ class HomeScreenContent extends StatelessWidget {
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
+                                  fontSize: 16,
                                 ),
                               ),
                             ],
@@ -412,20 +867,38 @@ class HomeScreenContent extends StatelessWidget {
                         ),
                       ],
                     ),
-                    SizedBox(height: 16),
+                    SizedBox(height: 20),
                     Container(
-                      height: 80,
+                      height: 100,
                       child: _buildMiniChart(isPositive),
                     ),
-                    SizedBox(height: 8),
+                    SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Text(
-                          'Last Updated: ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.access_time,
+                                color: Colors.white70,
+                                size: 14,
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'Last Updated: ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -471,195 +944,255 @@ class HomeScreenContent extends StatelessWidget {
   }
 
   Widget _buildTopGainersSection(BuildContext context, MarketProvider marketProvider) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Top Gainers',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+    return Container(
+      decoration: BoxDecoration(
+        color: Color(0xFFF7F5FA),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Top Gainers',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green[700],
                 ),
-                Icon(Icons.arrow_upward, color: Colors.green, size: 16),
-              ],
-            ),
-            SizedBox(height: 12),
-            marketProvider.isLoadingGainers 
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                padding: EdgeInsets.all(6),
+                child: Icon(Icons.arrow_upward, color: Colors.green, size: 18),
+              ),
+            ],
+          ),
+          SizedBox(height: 10),
+          marketProvider.isLoadingGainers
               ? Center(
                   child: SizedBox(
                     height: 20,
                     width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                    ),
                   ),
                 )
               : marketProvider.gainers.isEmpty
-                ? Center(child: Text('No data available'))
-                : Column(
-                    children: marketProvider.gainers
-                      .take(5) // Show only top 5
-                      .map((stock) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6.0),
-                        child: InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => CompanyDetailsScreen(
-                                  symbol: stock.symbol,
-                                  companyName: stock.companyName,
-                                ),
-                              ),
-                            );
-                          },
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      stock.symbol,
-                                      style: TextStyle(fontWeight: FontWeight.bold),
-                                    ),
-                                    Text(
-                                      'Rs. ${stock.ltp.toStringAsFixed(2)}',
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 12,
+                  ? Center(child: Text('No data available', style: TextStyle(fontSize: 12)))
+                  : Column(
+                      children: marketProvider.gainers
+                          .take(5)
+                          .map((stock) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => CompanyDetailsScreen(
+                                          symbol: stock.symbol,
+                                          companyName: stock.companyName,
+                                        ),
                                       ),
+                                    );
+                                  },
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.7),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  '+${stock.changePercent.toStringAsFixed(2)}%',
-                                  style: TextStyle(
-                                    color: Colors.green,
-                                    fontWeight: FontWeight.bold,
+                                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              stock.symbol,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                                color: Colors.black,
+                                              ),
+                                            ),
+                                            SizedBox(height: 1),
+                                            Text(
+                                              'Rs. ${stock.ltp.toStringAsFixed(2)}',
+                                              style: TextStyle(
+                                                color: Colors.grey[700],
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.withOpacity(0.13),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          child: Text(
+                                            '+${stock.changePercent.toStringAsFixed(2)}%',
+                                            style: TextStyle(
+                                              color: Colors.green[700],
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ))
-                      .toList(),
-                  ),
-          ],
-        ),
+                              ))
+                          .toList(),
+                    ),
+        ],
       ),
     );
   }
-  
+
   Widget _buildTopLosersSection(BuildContext context, MarketProvider marketProvider) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Top Losers',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+    return Container(
+      decoration: BoxDecoration(
+        color: Color(0xFFF7F5FA),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Top Losers',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red[700],
                 ),
-                Icon(Icons.arrow_downward, color: Colors.red, size: 16),
-              ],
-            ),
-            SizedBox(height: 12),
-            marketProvider.isLoadingLosers 
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                padding: EdgeInsets.all(6),
+                child: Icon(Icons.arrow_downward, color: Colors.red, size: 18),
+              ),
+            ],
+          ),
+          SizedBox(height: 10),
+          marketProvider.isLoadingLosers
               ? Center(
                   child: SizedBox(
                     height: 20,
                     width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+                    ),
                   ),
                 )
               : marketProvider.losers.isEmpty
-                ? Center(child: Text('No data available'))
-                : Column(
-                    children: marketProvider.losers
-                      .take(5) // Show only top 5
-                      .map((stock) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6.0),
-                        child: InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => CompanyDetailsScreen(
-                                  symbol: stock.symbol,
-                                  companyName: stock.companyName,
-                                ),
-                              ),
-                            );
-                          },
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      stock.symbol,
-                                      style: TextStyle(fontWeight: FontWeight.bold),
-                                    ),
-                                    Text(
-                                      'Rs. ${stock.ltp.toStringAsFixed(2)}',
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 12,
+                  ? Center(child: Text('No data available', style: TextStyle(fontSize: 12)))
+                  : Column(
+                      children: marketProvider.losers
+                          .take(5)
+                          .map((stock) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => CompanyDetailsScreen(
+                                          symbol: stock.symbol,
+                                          companyName: stock.companyName,
+                                        ),
                                       ),
+                                    );
+                                  },
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.7),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  '${stock.changePercent.toStringAsFixed(2)}%',
-                                  style: TextStyle(
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.bold,
+                                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              stock.symbol,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                                color: Colors.black,
+                                              ),
+                                            ),
+                                            SizedBox(height: 1),
+                                            Text(
+                                              'Rs. ${stock.ltp.toStringAsFixed(2)}',
+                                              style: TextStyle(
+                                                color: Colors.grey[700],
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.red.withOpacity(0.13),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          child: Text(
+                                            '${stock.changePercent.toStringAsFixed(2)}%',
+                                            style: TextStyle(
+                                              color: Colors.red[700],
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ))
-                      .toList(),
-                  ),
-          ],
-        ),
+                              ))
+                          .toList(),
+                    ),
+        ],
       ),
     );
   }
@@ -751,40 +1284,59 @@ class HomeScreenContent extends StatelessWidget {
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
         childAspectRatio: 1.1,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
       ),
       itemCount: tools.length,
       itemBuilder: (context, index) {
         final tool = tools[index];
         return Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 4,
+          shadowColor: tool['color'].withOpacity(0.2),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: InkWell(
-            onTap: tool['onTap'],
-            borderRadius: BorderRadius.circular(12),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: tool['color'].withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    tool['icon'],
-                    size: 28,
-                    color: tool['color'],
-                  ),
+            onTap: tool['onTap'] as void Function()?,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    tool['color'].withOpacity(0.1),
+                    tool['color'].withOpacity(0.05),
+                  ],
                 ),
-                SizedBox(height: 8),
-                Text(
-                  tool['title'],
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ],
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: tool['color'].withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      tool['icon'] as IconData,
+                      size: 28,
+                      color: tool['color'],
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    tool['title'] as String,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );

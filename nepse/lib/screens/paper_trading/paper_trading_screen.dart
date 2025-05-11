@@ -197,7 +197,7 @@ class _PaperTradingScreenState extends State<PaperTradingScreen> with SingleTick
 
   Widget _buildDashboardTab(BuildContext context, dynamic portfolio, MarketProvider marketProvider) {
     final isProfit = portfolio.totalProfit >= 0;
-    
+    final formatter = NumberFormat("#,##0.00", "en_US");
     return RefreshIndicator(
       onRefresh: _loadAllData,
       child: SingleChildScrollView(
@@ -206,32 +206,38 @@ class _PaperTradingScreenState extends State<PaperTradingScreen> with SingleTick
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // NEPSE Index Chart Card - Enhanced with trading vibe
+            // NEPSE Index Card
             Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 5,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: EdgeInsets.all(18),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'NEPSE Index',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Row(
+                          children: [
+                            Icon(Icons.show_chart, color: Theme.of(context).primaryColor, size: 22),
+                            SizedBox(width: 8),
+                            Text(
+                              'NEPSE Index',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                         if (!_loadingChart && marketProvider.indices.isNotEmpty)
                           Container(
                             padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
                               color: marketProvider.indices.first['change'] >= 0 
-                                ? Colors.green.withOpacity(0.1) 
-                                : Colors.red.withOpacity(0.1),
+                                ? Colors.green.withOpacity(0.12) 
+                                : Colors.red.withOpacity(0.12),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Row(
@@ -243,7 +249,7 @@ class _PaperTradingScreenState extends State<PaperTradingScreen> with SingleTick
                                   color: marketProvider.indices.first['change'] >= 0 
                                     ? Colors.green[700] 
                                     : Colors.red[700],
-                                  size: 14,
+                                  size: 16,
                                 ),
                                 SizedBox(width: 4),
                                 Text(
@@ -253,6 +259,7 @@ class _PaperTradingScreenState extends State<PaperTradingScreen> with SingleTick
                                       ? Colors.green[700] 
                                       : Colors.red[700],
                                     fontWeight: FontWeight.bold,
+                                    fontSize: 13,
                                   ),
                                 ),
                               ],
@@ -260,253 +267,178 @@ class _PaperTradingScreenState extends State<PaperTradingScreen> with SingleTick
                           ),
                       ],
                     ),
-                    SizedBox(height: 8),
+                    SizedBox(height: 10),
                     if (!_loadingChart && marketProvider.indices.isNotEmpty)
                       Row(
                         children: [
                           Text(
-                            'Rs. ${formatter.format(marketProvider.indices.first['value'] ?? 0)}',
+                            'रु ${formatter.format(marketProvider.indices.first['value'] ?? 0)}',
                             style: TextStyle(
-                              fontSize: 24,
+                              fontSize: 26,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          SizedBox(width: 8),
+                          SizedBox(width: 10),
                           Text(
-                            '${marketProvider.indices.first['change'] >= 0 ? '+' : ''}${formatter.format(marketProvider.indices.first['change'] ?? 0)}',
+                            '${marketProvider.indices.first['change'] >= 0 ? '+' : ''}रु ${formatter.format(marketProvider.indices.first['change'] ?? 0)}',
                             style: TextStyle(
                               color: marketProvider.indices.first['change'] >= 0 
                                 ? Colors.green[700] 
                                 : Colors.red[700],
                               fontWeight: FontWeight.w500,
+                              fontSize: 15,
                             ),
                           ),
                         ],
                       ),
-                    SizedBox(height: 16),
-                    // Timeframe selector - More pro trading look
-                    Container(
-                      height: 36,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: _timeframes.map((timeframe) => 
-                          Padding(
-                            padding: EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              label: Text(timeframe),
-                              selected: _selectedTimeframe == timeframe,
-                              selectedColor: Theme.of(context).primaryColor.withOpacity(0.2),
-                              onSelected: (selected) {
-                                if (selected) {
-                                  setState(() {
-                                    _selectedTimeframe = timeframe;
-                                  });
-                                  // In real app: reload data for this timeframe
-                                }
-                              },
-                            ),
-                          )
-                        ).toList(),
-                      ),
+                    SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Tooltip(
+                          message: 'Select timeframe',
+                          child: Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                        ),
+                        SizedBox(width: 6),
+                        Container(
+                          height: 32,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            shrinkWrap: true,
+                            children: _timeframes.map((timeframe) => 
+                              Padding(
+                                padding: EdgeInsets.only(right: 8),
+                                child: ChoiceChip(
+                                  label: Text(timeframe, style: TextStyle(fontSize: 12)),
+                                  selected: _selectedTimeframe == timeframe,
+                                  selectedColor: Theme.of(context).primaryColor.withOpacity(0.18),
+                                  onSelected: (selected) {
+                                    if (selected) {
+                                      setState(() {
+                                        _selectedTimeframe = timeframe;
+                                      });
+                                      // In real app: reload data for this timeframe
+                                    }
+                                  },
+                                ),
+                              )
+                            ).toList(),
+                          ),
+                        ),
+                      ],
                     ),
-                    SizedBox(height: 16),
+                    SizedBox(height: 14),
                     Container(
-                      height: 200,
+                      height: 180,
                       child: _loadingChart
                         ? Center(child: CircularProgressIndicator())
                         : _indexPoints.isEmpty
                           ? Center(child: Text('No chart data available'))
-                          : Stack(
-                              children: [
-                                LineChart(
-                                  LineChartData(
-                                    gridData: FlGridData(
-                                      show: true,
-                                      drawVerticalLine: false,
-                                      horizontalInterval: 100,
-                                      getDrawingHorizontalLine: (value) {
-                                        return FlLine(
-                                          color: Colors.grey.withOpacity(0.15),
-                                          strokeWidth: 1,
-                                          dashArray: [5, 5],
-                                        );
-                                      },
-                                    ),
-                                    titlesData: FlTitlesData(
-                                      show: true,
-                                      rightTitles: AxisTitles(
-                                        sideTitles: SideTitles(showTitles: false),
-                                      ),
-                                      topTitles: AxisTitles(
-                                        sideTitles: SideTitles(showTitles: false),
-                                      ),
-                                      bottomTitles: AxisTitles(
-                                        sideTitles: SideTitles(
-                                          showTitles: true,
-                                          reservedSize: 30,
-                                          interval: 5,
-                                          getTitlesWidget: (value, meta) {
-                                            // Display dates along bottom (simplified)
-                                            final now = DateTime.now();
-                                            final days = value.toInt();
-                                            final date = now.subtract(Duration(days: 30 - days));
-                                            
-                                            // Only show some dates to avoid crowding
-                                            if (days % 5 != 0 && days != 30) return const SizedBox();
-                                            
-                                            return Padding(
-                                              padding: const EdgeInsets.only(top: 8.0),
-                                              child: Text(
-                                                DateFormat('d/M').format(date),
-                                                style: TextStyle(
-                                                  color: Colors.grey,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                      leftTitles: AxisTitles(
-                                        sideTitles: SideTitles(
-                                          showTitles: true,
-                                          reservedSize: 45,
-                                          interval: 200,
-                                          getTitlesWidget: (value, meta) {
-                                            return Text(
-                                              value.toInt().toString(),
-                                              style: TextStyle(
-                                                color: Colors.grey,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                    borderData: FlBorderData(show: false),
-                                    lineBarsData: [
-                                      LineChartBarData(
-                                        spots: _indexPoints,
-                                        isCurved: true,
-                                        color: marketProvider.indices.isNotEmpty && 
-                                               marketProvider.indices.first['change'] >= 0
-                                          ? Colors.green[600]
-                                          : Colors.red[600],
-                                        barWidth: 3,
-                                        isStrokeCapRound: true,
-                                        dotData: FlDotData(
-                                          show: false,
-                                          getDotPainter: (spot, percent, barData, index) {
-                                            return FlDotCirclePainter(
-                                              radius: 2,
-                                              color: Colors.white,
-                                              strokeWidth: 2,
-                                              strokeColor: barData.color ?? Colors.green,
-                                            );
-                                          }
-                                        ),
-                                        belowBarData: BarAreaData(
-                                          show: true,
-                                          gradient: LinearGradient(
-                                            colors: marketProvider.indices.isNotEmpty &&
-                                                   marketProvider.indices.first['change'] >= 0
-                                              ? [
-                                                  Colors.green.withOpacity(0.3),
-                                                  Colors.green.withOpacity(0.0),
-                                                ]
-                                              : [
-                                                  Colors.red.withOpacity(0.3),
-                                                  Colors.red.withOpacity(0.0),
-                                                ],
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                          : LineChart(
+                              LineChartData(
+                                gridData: FlGridData(
+                                  show: true,
+                                  drawVerticalLine: false,
+                                  horizontalInterval: 100,
+                                  getDrawingHorizontalLine: (value) {
+                                    return FlLine(
+                                      color: Colors.grey.withOpacity(0.15),
+                                      strokeWidth: 1,
+                                      dashArray: [5, 5],
+                                    );
+                                  },
                                 ),
-                                // Add volume indicator at bottom
-                                Positioned(
-                                  bottom: 20,
-                                  left: 0,
-                                  right: 0,
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Container(
-                                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey[200],
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          'Vol: ${(Random().nextInt(5) + 1)}M',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.grey[700],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                                titlesData: FlTitlesData(show: false),
+                                borderData: FlBorderData(show: false),
+                                lineBarsData: [
+                                  LineChartBarData(
+                                    spots: _indexPoints,
+                                    isCurved: true,
+                                    color: marketProvider.indices.isNotEmpty && 
+                                           marketProvider.indices.first['change'] >= 0
+                                      ? Colors.green[600]
+                                      : Colors.red[600],
+                                    barWidth: 3,
+                                    isStrokeCapRound: true,
+                                    dotData: FlDotData(show: false),
+                                    belowBarData: BarAreaData(
+                                      show: true,
+                                      color: marketProvider.indices.isNotEmpty && 
+                                             marketProvider.indices.first['change'] >= 0
+                                        ? Colors.green.withOpacity(0.08)
+                                        : Colors.red.withOpacity(0.08),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                     ),
-                    // Market statistics
-                    if (!_loadingChart && marketProvider.indices.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _buildMarketStat('High', 'Rs. ${(marketProvider.indices.first['value'] + Random().nextDouble() * 20).toStringAsFixed(1)}'),
-                            _buildMarketStat('Low', 'Rs. ${(marketProvider.indices.first['value'] - Random().nextDouble() * 30).toStringAsFixed(1)}'),
-                            _buildMarketStat('Vol', '${Random().nextInt(9) + 1}M'),
-                          ],
-                        ),
-                      ),
                   ],
                 ),
               ),
             ),
-            SizedBox(height: 16),
-            
+            SizedBox(height: 18),
             // Portfolio Overview Card
             Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 5,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: EdgeInsets.all(18),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Portfolio Overview',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.account_balance_wallet, color: Theme.of(context).primaryColor, size: 22),
+                            SizedBox(width: 8),
+                            Text(
+                              'Portfolio Overview',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Tooltip(
+                          message: 'Reset your virtual portfolio',
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              side: BorderSide(color: Colors.red[300]!),
+                              foregroundColor: Colors.red[700],
+                              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            ),
+                            icon: Icon(Icons.refresh, size: 16),
+                            label: Text('Reset', style: TextStyle(fontSize: 13)),
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Portfolio reset feature coming soon!')),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                     SizedBox(height: 16),
                     Row(
                       children: [
                         Expanded(
                           child: _buildValueTile(
-                            'Total Portfolio Value',
-                            'Rs. ${formatter.format(portfolio.portfolioValue)}',
+                            'Total Value',
+                            'रु ${formatter.format(portfolio.portfolioValue)}',
                             null,
+                            Icons.pie_chart,
                           ),
                         ),
                         Expanded(
                           child: _buildValueTile(
                             'Cash Balance',
-                            'Rs. ${formatter.format(portfolio.currentBalance)}',
+                            'रु ${formatter.format(portfolio.currentBalance)}',
                             null,
+                            Icons.account_balance,
                           ),
                         ),
                       ],
@@ -517,54 +449,27 @@ class _PaperTradingScreenState extends State<PaperTradingScreen> with SingleTick
                         Expanded(
                           child: _buildValueTile(
                             'Holdings Value',
-                            'Rs. ${formatter.format(portfolio.totalMarketValue)}',
+                            'रु ${formatter.format(portfolio.totalMarketValue)}',
                             null,
+                            Icons.trending_up,
                           ),
                         ),
                         Expanded(
                           child: _buildValueTile(
                             'Profit/Loss',
-                            '${isProfit ? '+' : ''}Rs. ${formatter.format(portfolio.totalProfit)}',
+                            '${isProfit ? '+' : ''}रु ${formatter.format(portfolio.totalProfit)}',
                             isProfit ? Colors.green[700] : Colors.red[700],
+                            Icons.show_chart,
                           ),
                         ),
                       ],
-                    ),
-                    SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isProfit ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            isProfit ? Icons.trending_up : Icons.trending_down,
-                            color: isProfit ? Colors.green : Colors.red,
-                            size: 20,
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            '${isProfit ? '+' : ''}${portfolio.profitPercentage.toStringAsFixed(2)}% Overall Return',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: isProfit ? Colors.green[700] : Colors.red[700],
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),
               ),
             ),
-            SizedBox(height: 16),
-            
-            // Market Movers Section - Enhanced
+            SizedBox(height: 18),
+            // Market Movers
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -573,12 +478,12 @@ class _PaperTradingScreenState extends State<PaperTradingScreen> with SingleTick
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Market Movers',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      children: [
+                        Icon(Icons.trending_up, color: Colors.green[700], size: 20),
+                        SizedBox(width: 8),
+                        Text('Market Movers', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      ],
                     ),
                     SizedBox(height: 16),
                     DefaultTabController(
@@ -594,81 +499,131 @@ class _PaperTradingScreenState extends State<PaperTradingScreen> with SingleTick
                               Tab(text: 'Top Losers'),
                             ],
                           ),
-                          SizedBox(height: 16),
+                          SizedBox(height: 12),
                           Container(
-                            height: 200,
+                            height: 180,
                             child: TabBarView(
                               children: [
+                                // Top Gainers Horizontal Scroll
                                 marketProvider.gainers.isEmpty 
                                   ? Center(child: Text('No data available'))
-                                  : ListView.builder(
-                                      physics: NeverScrollableScrollPhysics(),
-                                      itemCount: min(5, marketProvider.gainers.length),
+                                  : ListView.separated(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: marketProvider.gainers.length,
+                                      separatorBuilder: (context, i) => SizedBox(width: 10),
                                       itemBuilder: (context, index) {
                                         final stock = marketProvider.gainers[index];
-                                        return ListTile(
-                                          contentPadding: EdgeInsets.symmetric(vertical: 4),
-                                          onTap: () => _showTradeSheet(context, preSelectedSymbol: stock.symbol),
-                                          title: Text(
-                                            stock.symbol,
-                                            style: TextStyle(fontWeight: FontWeight.bold),
-                                          ),
-                                          subtitle: Text(
-                                            'Rs. ${formatter.format(stock.ltp)} | Vol: ${(Random().nextInt(99) + 1)}K',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey[600],
-                                            ),
-                                          ),
-                                          trailing: Container(
-                                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.green.withOpacity(0.1),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              '+${stock.changePercent.toStringAsFixed(2)}%',
-                                              style: TextStyle(
-                                                color: Colors.green[700],
-                                                fontWeight: FontWeight.bold,
+                                        return Container(
+                                          width: 170,
+                                          child: Card(
+                                            margin: EdgeInsets.symmetric(vertical: 8),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            color: Colors.green.withOpacity(0.07),
+                                            child: InkWell(
+                                              borderRadius: BorderRadius.circular(10),
+                                              onTap: () => _showTradeSheet(context, preSelectedSymbol: stock.symbol),
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(12.0),
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        Icon(Icons.arrow_upward, color: Colors.green[700], size: 18),
+                                                        SizedBox(width: 6),
+                                                        Text(
+                                                          stock.symbol,
+                                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    SizedBox(height: 8),
+                                                    Text(
+                                                      'रु ${formatter.format(stock.ltp)}',
+                                                      style: TextStyle(fontSize: 13, color: Colors.grey[800]),
+                                                    ),
+                                                    SizedBox(height: 4),
+                                                    Container(
+                                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.green.withOpacity(0.13),
+                                                        borderRadius: BorderRadius.circular(8),
+                                                      ),
+                                                      child: Text(
+                                                        '+${stock.changePercent.toStringAsFixed(2)}%',
+                                                        style: TextStyle(
+                                                          color: Colors.green[700],
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ),
                                         );
                                       },
                                     ),
+                                // Top Losers Horizontal Scroll
                                 marketProvider.losers.isEmpty 
                                   ? Center(child: Text('No data available'))
-                                  : ListView.builder(
-                                      physics: NeverScrollableScrollPhysics(),
-                                      itemCount: min(5, marketProvider.losers.length),
+                                  : ListView.separated(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: marketProvider.losers.length,
+                                      separatorBuilder: (context, i) => SizedBox(width: 10),
                                       itemBuilder: (context, index) {
                                         final stock = marketProvider.losers[index];
-                                        return ListTile(
-                                          contentPadding: EdgeInsets.symmetric(vertical: 4),
-                                          onTap: () => _showTradeSheet(context, preSelectedSymbol: stock.symbol),
-                                          title: Text(
-                                            stock.symbol,
-                                            style: TextStyle(fontWeight: FontWeight.bold),
-                                          ),
-                                          subtitle: Text(
-                                            'Rs. ${formatter.format(stock.ltp)} | Vol: ${(Random().nextInt(99) + 1)}K',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey[600],
-                                            ),
-                                          ),
-                                          trailing: Container(
-                                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.red.withOpacity(0.1),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              '${stock.changePercent.toStringAsFixed(2)}%',
-                                              style: TextStyle(
-                                                color: Colors.red[700],
-                                                fontWeight: FontWeight.bold,
+                                        return Container(
+                                          width: 170,
+                                          child: Card(
+                                            margin: EdgeInsets.symmetric(vertical: 8),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            color: Colors.red.withOpacity(0.07),
+                                            child: InkWell(
+                                              borderRadius: BorderRadius.circular(10),
+                                              onTap: () => _showTradeSheet(context, preSelectedSymbol: stock.symbol),
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(12.0),
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        Icon(Icons.arrow_downward, color: Colors.red[700], size: 18),
+                                                        SizedBox(width: 6),
+                                                        Text(
+                                                          stock.symbol,
+                                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    SizedBox(height: 8),
+                                                    Text(
+                                                      'रु ${formatter.format(stock.ltp)}',
+                                                      style: TextStyle(fontSize: 13, color: Colors.grey[800]),
+                                                    ),
+                                                    SizedBox(height: 4),
+                                                    Container(
+                                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.red.withOpacity(0.13),
+                                                        borderRadius: BorderRadius.circular(8),
+                                                      ),
+                                                      child: Text(
+                                                        '${stock.changePercent.toStringAsFixed(2)}%',
+                                                        style: TextStyle(
+                                                          color: Colors.red[700],
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -691,29 +646,38 @@ class _PaperTradingScreenState extends State<PaperTradingScreen> with SingleTick
     );
   }
 
-  Widget _buildMarketStat(String label, String value) {
-    return Column(
+  Widget _buildValueTile(String title, String value, Color? valueColor, [IconData? icon]) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
-        SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-          ),
+        if (icon != null) ...[
+          Icon(icon, size: 16, color: Colors.grey[600]),
+          SizedBox(width: 6),
+        ],
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 13,
+              ),
+            ),
+            SizedBox(height: 2),
+            Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: valueColor,
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
-
-  // Other methods remain unchanged...
 
   Widget _buildHistoryTab(BuildContext context, List<PaperTrade> paperTrades) {
     if (paperTrades.isEmpty) {
@@ -860,30 +824,6 @@ class _PaperTradingScreenState extends State<PaperTradingScreen> with SingleTick
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildValueTile(String title, String value, Color? valueColor) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            color: Colors.grey[600],
-            fontSize: 14,
-          ),
-        ),
-        SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-            color: valueColor,
-          ),
-        ),
-      ],
     );
   }
 }

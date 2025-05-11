@@ -475,429 +475,244 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final portfolio = Provider.of<PaperTradingProvider>(context).getPortfolio(widget.portfolioId);
-    final tradeTotal = _calculateTradeTotal();
+    final theme = Theme.of(context);
     final formatter = NumberFormat("#,##0.00", "en_US");
-    
+    final paperTradingProvider = Provider.of<PaperTradingProvider>(context);
+    final portfolio = paperTradingProvider.getPortfolio(widget.portfolioId);
+    final isBuy = _selectedType == 'Buy';
+    final tradeTotal = _calculateTradeTotal();
+    double? newBalance;
+    if (portfolio != null && (_quantityController.text.isNotEmpty && _priceController.text.isNotEmpty)) {
+      newBalance = isBuy
+        ? (portfolio.currentBalance - tradeTotal)
+        : (portfolio.currentBalance + tradeTotal);
+    }
     return Scaffold(
       appBar: AppBar(
-        title: Text('Paper Trade Execution'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.refresh),
-            onPressed: () {
-              if (_symbolController.text.isNotEmpty) {
-                _loadStockData(_symbolController.text.trim());
-              }
-            },
-            tooltip: 'Refresh Data',
-          ),
-        ],
+        title: Text('Execute Paper Trade'),
+        backgroundColor: theme.primaryColor,
+        elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Portfolio summary card
-            if (portfolio != null)
-              Card(
-                elevation: 2,
-                margin: EdgeInsets.only(bottom: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Available Balance',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[700],
-                            ),
-                          ),
-                          Text(
-                            'Rs. ${formatter.format(portfolio.currentBalance)}',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              
-            // Stock chart and info section
-            if (_stockData != null && !_isLoadingStockData)
-              Card(
-                elevation: 3,
-                margin: EdgeInsets.only(bottom: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Stock title and current price
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            _symbolController.text,
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                'Rs. ${formatter.format(_stockData!['currentPrice'])}',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).primaryColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      Divider(height: 24),
-                      
-                      // Simple stock info instead of chart
-                      Text(
-                        'Current Market Price',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Use this price for your paper trade or enter a custom price below.',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              
-            if (_isLoadingStockData)
-              Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 16),
-                      Text('Loading stock data...'),
-                    ],
-                  ),
-                ),
-              ),
-              
-            // Trade execution form
-            Card(
-              elevation: 3,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(18),
+          child: Center(
+            child: Card(
+              elevation: 5,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: EdgeInsets.all(20),
                 child: Form(
                   key: _formKey,
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Trade Details',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Text('Trade Type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _selectedType == 'Buy' ? Colors.green[600] : Colors.grey[200],
+                                foregroundColor: _selectedType == 'Buy' ? Colors.white : Colors.black,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                elevation: 0,
+                              ),
+                              onPressed: () => setState(() => _selectedType = 'Buy'),
+                              child: Text('Buy'),
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _selectedType == 'Sell' ? Colors.red[600] : Colors.grey[200],
+                                foregroundColor: _selectedType == 'Sell' ? Colors.white : Colors.black,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                elevation: 0,
+                              ),
+                              onPressed: () => setState(() => _selectedType = 'Sell'),
+                              child: Text('Sell'),
+                            ),
+                          ),
+                        ],
                       ),
-                      SizedBox(height: 16),
-                      
-                      // Symbol field
+                      SizedBox(height: 22),
+                      Text('Stock Symbol', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      SizedBox(height: 8),
                       Autocomplete<String>(
                         optionsBuilder: (TextEditingValue textEditingValue) {
-                          if (textEditingValue.text.isEmpty) {
+                          if (textEditingValue.text == '') {
                             return const Iterable<String>.empty();
                           }
-                          return _availableSymbols.where((symbol) {
-                            return symbol.contains(textEditingValue.text.toUpperCase());
+                          return _availableSymbols.where((String option) {
+                            return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
                           });
                         },
+                        initialValue: TextEditingValue(text: _symbolController.text),
                         onSelected: (String selection) {
                           _symbolController.text = selection;
                           _loadStockData(selection);
                         },
-                        fieldViewBuilder: (
-                          BuildContext context,
-                          TextEditingController controller,
-                          FocusNode focusNode,
-                          VoidCallback onFieldSubmitted,
-                        ) {
-                          _symbolController = controller;
+                        fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
                           return TextFormField(
                             controller: controller,
                             focusNode: focusNode,
                             decoration: InputDecoration(
-                              labelText: 'Stock Symbol',
-                              hintText: 'E.g. NABIL',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              suffixIcon: IconButton(
-                                icon: Icon(Icons.search),
-                                onPressed: () {
-                                  _loadStockData(controller.text.trim());
-                                },
-                              ),
+                              hintText: 'Enter or select symbol',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              suffixIcon: _isLoadingStockData ? Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                              ) : null,
                             ),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Please enter a stock symbol';
-                              }
-                              return null;
+                            validator: (value) => value == null || value.isEmpty ? 'Symbol required' : null,
+                            onChanged: (val) {
+                              _symbolController.text = val;
+                              _loadStockData(val);
+                              setState(() {}); // update new balance
                             },
-                            textCapitalization: TextCapitalization.characters,
                           );
                         },
                       ),
-                      SizedBox(height: 16),
-                      
-                      // Trade type toggle - Better styled
-                      Container(
-                        margin: EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey[300]!),
-                        ),
-                        child: Row(
+                      SizedBox(height: 18),
+                      if (_stockData != null)
+                        Row(
                           children: [
-                            Expanded(
-                              child: InkWell(
-                                onTap: () => setState(() => _selectedType = 'Buy'),
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(vertical: 12),
-                                  decoration: BoxDecoration(
-                                    color: _selectedType == 'Buy' 
-                                      ? Colors.green.withOpacity(0.2) 
-                                      : Colors.transparent,
-                                    borderRadius: BorderRadius.horizontal(
-                                      left: Radius.circular(7),
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      'BUY',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: _selectedType == 'Buy' 
-                                          ? Colors.green[800] 
-                                          : Colors.grey[600],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Container(
-                              width: 1,
-                              height: 40,
-                              color: Colors.grey[300],
-                            ),
-                            Expanded(
-                              child: InkWell(
-                                onTap: () => setState(() => _selectedType = 'Sell'),
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(vertical: 12),
-                                  decoration: BoxDecoration(
-                                    color: _selectedType == 'Sell' 
-                                      ? Colors.red.withOpacity(0.2) 
-                                      : Colors.transparent,
-                                    borderRadius: BorderRadius.horizontal(
-                                      right: Radius.circular(7),
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      'SELL',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: _selectedType == 'Sell' 
-                                          ? Colors.red[800] 
-                                          : Colors.grey[600],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
+                            Icon(Icons.info_outline, color: Colors.blue[400], size: 18),
+                            SizedBox(width: 6),
+                            Text('Current Price: रु ${formatter.format(_stockData!['currentPrice'] ?? 0)}', style: TextStyle(fontSize: 13, color: Colors.blue[700])),
                           ],
                         ),
-                      ),
-                      
-                      // Quantity field
-                      TextFormField(
-                        controller: _quantityController,
-                        decoration: InputDecoration(
-                          labelText: 'Quantity',
-                          hintText: 'Enter number of shares',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          prefixIcon: Icon(Icons.format_list_numbered),
-                        ),
-                        keyboardType: TextInputType.number,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter a quantity';
-                          }
-                          try {
-                            final quantity = double.parse(value);
-                            if (quantity <= 0) {
-                              return 'Quantity must be greater than zero';
-                            }
-                          } catch (e) {
-                            return 'Please enter a valid number';
-                          }
-                          return null;
-                        },
-                        onChanged: (_) {
-                          // Update state to recalculate trade total
-                          setState(() {});
-                        },
-                      ),
-                      SizedBox(height: 16),
-                      
-                      // Price field
-                      TextFormField(
-                        controller: _priceController,
-                        decoration: InputDecoration(
-                          labelText: 'Price (Rs.)',
-                          hintText: 'Price per share',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          prefixIcon: Icon(Icons.attach_money),
-                          enabled: !_useCurrentPrice,
-                        ),
-                        keyboardType: TextInputType.number,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter a price';
-                          }
-                          try {
-                            final price = double.parse(value);
-                            if (price <= 0) {
-                              return 'Price must be greater than zero';
-                            }
-                          } catch (e) {
-                            return 'Please enter a valid number';
-                          }
-                          return null;
-                        },
-                        onChanged: (_) {
-                          // Update state to recalculate trade total
-                          setState(() {});
-                        },
-                      ),
-                      
-                      // Use current price checkbox
-                      CheckboxListTile(
-                        title: Text('Use current market price'),
-                        value: _useCurrentPrice,
-                        onChanged: (value) {
-                          setState(() {
-                            _useCurrentPrice = value ?? true;
-                            if (_useCurrentPrice && _stockData != null) {
-                              _priceController.text = _stockData!['currentPrice'].toString();
-                            }
-                          });
-                        },
-                        controlAffinity: ListTileControlAffinity.leading,
-                        dense: true,
-                      ),
-                      
-                      // Trade summary
-                      if (portfolio != null)
-                        _buildBalanceSummary(portfolio, tradeTotal),
-                      
-                      if (_errorMessage != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16.0),
-                          child: Container(
-                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.red[50],
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.red[200]!),
-                            ),
-                            child: Row(
+                      SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(Icons.error_outline, color: Colors.red),
-                                SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _errorMessage!,
-                                    style: TextStyle(color: Colors.red[700]),
+                                Text('Quantity', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                SizedBox(height: 8),
+                                TextFormField(
+                                  controller: _quantityController,
+                                  keyboardType: TextInputType.number,
+                                  decoration: InputDecoration(
+                                    hintText: 'e.g. 10',
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                                   ),
+                                  validator: (value) {
+                                    final qty = double.tryParse(value ?? '');
+                                    if (qty == null || qty <= 0) return 'Enter valid quantity';
+                                    return null;
+                                  },
+                                  onChanged: (_) => setState(() {}), // update new balance
                                 ),
                               ],
                             ),
                           ),
-                        ),
-                        
-                      SizedBox(height: 24),
-                      
-                      // Execute button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _isExecuting ? null : _executeTrade,
-                          child: _isExecuting
-                              ? SizedBox(
-                                  height: 24,
-                                  width: 24,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Text(
-                                  'Execute ${_selectedType} Order',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                          SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text('Price', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                    SizedBox(width: 4),
+                                    Checkbox(
+                                      value: _useCurrentPrice,
+                                      onChanged: (val) {
+                                        setState(() {
+                                          _useCurrentPrice = val ?? true;
+                                          if (_useCurrentPrice && _stockData != null) {
+                                            _priceController.text = (_stockData!['currentPrice'] ?? '').toString();
+                                          }
+                                        });
+                                      },
+                                    ),
+                                    Text('Current', style: TextStyle(fontSize: 12)),
+                                  ],
                                 ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _selectedType == 'Buy' ? Colors.green[700] : Colors.red[700],
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                                SizedBox(height: 8),
+                                TextFormField(
+                                  controller: _priceController,
+                                  keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                  decoration: InputDecoration(
+                                    hintText: 'e.g. 500',
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  validator: (value) {
+                                    final price = double.tryParse(value ?? '');
+                                    if (price == null || price <= 0) return 'Enter valid price';
+                                    return null;
+                                  },
+                                  onChanged: (_) => setState(() {}), // update new balance
+                                ),
+                              ],
                             ),
                           ),
+                        ],
+                      ),
+                      SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Icon(Icons.calculate, color: Colors.orange[700], size: 18),
+                          SizedBox(width: 6),
+                          Text('Total: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          Text('रु ${formatter.format(tradeTotal)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: theme.primaryColor)),
+                        ],
+                      ),
+                      if (_errorMessage != null) ...[
+                        SizedBox(height: 14),
+                        Text(_errorMessage!, style: TextStyle(color: Colors.red, fontWeight: FontWeight.w500)),
+                      ],
+                      SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _selectedType == 'Buy' ? Colors.green[700] : Colors.red[700],
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          onPressed: _isExecuting ? null : _executeTrade,
+                          child: _isExecuting
+                              ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : Text(_selectedType == 'Buy' ? 'Buy' : 'Sell'),
                         ),
                       ),
+                      if (newBalance != null && _quantityController.text.isNotEmpty && _priceController.text.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 18.0),
+                          child: Row(
+                            children: [
+                              Icon(Icons.account_balance_wallet, size: 18, color: newBalance >= (portfolio?.currentBalance ?? 0) ? Colors.green : Colors.red),
+                              SizedBox(width: 8),
+                              Text(
+                                'Balance after trade: ',
+                                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+                              ),
+                              Text(
+                                'रु ${formatter.format(newBalance)}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: newBalance >= (portfolio?.currentBalance ?? 0) ? Colors.green : Colors.red,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
