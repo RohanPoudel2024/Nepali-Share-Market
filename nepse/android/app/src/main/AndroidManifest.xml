@@ -1,7 +1,6 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">    <application
         android:label="nepse"
-        android:name="${applicationName}"
+        android:name=".NepseApplication"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

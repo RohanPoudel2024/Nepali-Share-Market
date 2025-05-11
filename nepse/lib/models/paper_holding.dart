@@ -23,6 +23,9 @@ class PaperHolding {
   double get currentPrice => _currentPrice;
   set currentPrice(double value) {
     _currentPrice = value;
+    // Update marketValue and currentValue when price changes
+    _marketValue = quantity * value;
+    _currentValue = _marketValue;
   }
 
   double get marketValue => _marketValue;
@@ -33,6 +36,21 @@ class PaperHolding {
   double get currentValue => _currentValue;
   set currentValue(double value) {
     _currentValue = value;
+  }
+
+  // Add an averageBuyPrice getter that returns buyPrice
+  double get averageBuyPrice => buyPrice;
+  
+  double get investmentValue => quantity * averageBuyPrice;
+  double get calculatedCurrentValue => quantity * (currentPrice > 0 ? currentPrice : averageBuyPrice);
+  
+  // Fix profit calculation to use calculatedCurrentValue instead of currentValue
+  double get profit => calculatedCurrentValue - investmentValue;
+
+  double get profitPercentage {
+    if (investmentValue == 0) return 0;
+    // Ensure proper rounding to avoid floating point errors
+    return ((profit / investmentValue) * 100).roundToDouble() / 100;
   }
 
   factory PaperHolding.fromJson(Map<String, dynamic> json) {

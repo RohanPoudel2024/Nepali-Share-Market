@@ -5,6 +5,7 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Updated Gradle configurations to fully support embedding v2
 android {
     namespace = "com.example.nepse"
     compileSdk = flutter.compileSdkVersion
@@ -17,6 +18,20 @@ android {
 
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_11.toString()
+    }
+    
+    // Added dependencies required for Flutter embedding v2
+    dependencies {
+        // Flutter embedding v2 dependencies
+        implementation("androidx.annotation:annotation:1.7.1")
+        implementation("androidx.lifecycle:lifecycle-runtime:2.7.0")
+        implementation("androidx.activity:activity:1.8.2")
+        implementation("androidx.fragment:fragment:1.5.5") 
+        implementation("androidx.window:window:1.0.0")
+        implementation("androidx.window:window-java:1.0.0")
+        
+        // Add specific support for flutter_secure_storage
+        implementation("androidx.security:security-crypto:1.1.0-alpha06")
     }
 
     defaultConfig {

@@ -404,19 +404,23 @@ class _PaperPortfolioDetailScreenState extends State<PaperPortfolioDetailScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.business_center, size: 64, color: Colors.grey[400]),
+            Icon(Icons.account_balance, size: 64, color: Colors.grey[400]),
             SizedBox(height: 16),
             Text(
-              'No Holdings Yet',
+              'No Holdings',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
             SizedBox(height: 8),
-            Text(
-              'Execute your first trade to get started',
-              style: TextStyle(color: Colors.grey[600]),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                'Add some trades to start building your paper portfolio',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[600]),
+              ),
             ),
           ],
         ),

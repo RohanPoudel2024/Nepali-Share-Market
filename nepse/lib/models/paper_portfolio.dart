@@ -11,6 +11,7 @@ class PaperPortfolio {
   double _totalInvestment = 0.0;
   double _totalProfit = 0.0;
   double _cumulativePurchases = 0.0;
+  double _profitPercentage = 0.0; // Add this private field
   List<PaperTrade> _paperTrades = [];
 
   PaperPortfolio({
@@ -51,9 +52,10 @@ class PaperPortfolio {
     return currentBalance + totalMarketValue;
   }
 
-  double get profitPercentage {
-    if (totalInvestment <= 0) return 0.0;
-    return (totalProfit / totalInvestment) * 100;
+  // Add getter and setter for profitPercentage
+  double get profitPercentage => _profitPercentage;
+  set profitPercentage(double value) {
+    _profitPercentage = value;
   }
   
   double get returnOnInvestment {

@@ -320,7 +320,7 @@ class PaperTradingProvider extends ChangeNotifier {
 
     // Calculate current investment value from holdings
     for (var holding in portfolio.holdings) {
-      // Calculate investment value (quantity × average buy price)
+      // Calculate investment value
       final investmentValue = holding.quantity * holding.averageBuyPrice;
       totalInvestment += investmentValue;
       
@@ -328,18 +328,19 @@ class PaperTradingProvider extends ChangeNotifier {
         // Try to get current market price
         final currentPrice = _marketProvider.getStockPrice(holding.symbol);
         if (currentPrice != null && currentPrice > 0) {
+          // Update price which will trigger marketValue and currentValue updates
           holding.currentPrice = currentPrice;
-          holding.marketValue = holding.quantity * currentPrice;
-          holding.currentValue = holding.marketValue;
-          
-          // Add to total market value
-          totalMarketValue += holding.marketValue;
         } else {
+          // If price can't be retrieved, use averageBuyPrice
           holding.currentPrice = holding.averageBuyPrice;
-          holding.marketValue = holding.quantity * holding.averageBuyPrice;
-          holding.currentValue = holding.marketValue;
-          totalMarketValue += holding.marketValue;
         }
+        
+        // Set market value and current value explicitly
+        holding.marketValue = holding.quantity * (holding.currentPrice ?? 0.0);
+        holding.currentValue = holding.marketValue;
+        
+        // Add to total market value
+        totalMarketValue += holding.marketValue;
       } catch (e) {
         print('Error updating price for ${holding.symbol}: $e');
         holding.currentPrice = holding.averageBuyPrice;
@@ -354,21 +355,12 @@ class PaperTradingProvider extends ChangeNotifier {
     portfolio.totalInvestment = totalInvestment;
     portfolio.totalProfit = totalMarketValue - totalInvestment;
 
-    // If cumulativePurchases was not set from server data, calculate from trades
-    if (portfolio.cumulativePurchases <= 0 && portfolio.paperTrades.isNotEmpty) {
-      double totalPurchases = 0.0;
-      for (var trade in portfolio.paperTrades) {
-        if (trade.type.toUpperCase() == 'BUY') {
-          totalPurchases += trade.totalAmount;
-        }
-      }
-      portfolio.cumulativePurchases = totalPurchases;
+    // Calculate and set percentage return on investment
+    if (totalInvestment > 0) {
+      portfolio.profitPercentage = (portfolio.totalProfit / totalInvestment) * 100;
+    } else {
+      portfolio.profitPercentage = 0;
     }
-    
-    // Important: Portfolio value is Cash Balance + Market Value of Holdings
-    // No need to modify the calculation as portfolio.portfolioValue already 
-    // returns currentBalance + totalMarketValue
-    print('Portfolio updated: Cash Balance=${portfolio.currentBalance}, Market Value=${totalMarketValue}, Total Value=${portfolio.portfolioValue}');
   }
 
   // Add this new method

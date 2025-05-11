@@ -310,6 +310,76 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
     // Show warning if buy order would result in negative balance
     final isInsufficientFunds = isBuy && remainingBalance < 0;
     
+    // For sell orders, calculate potential profit/loss if we have the stock data
+    Widget? profitLossSection;
+  
+    if (!isBuy && _symbolController.text.isNotEmpty) {
+      try {
+        // Get current holding details if available
+        final holding = portfolio.holdings.firstWhere(
+          (h) => h.symbol == _symbolController.text,
+        );
+        
+        final quantity = double.tryParse(_quantityController.text) ?? 0;
+        final sellPrice = double.tryParse(_priceController.text) ?? 0;
+        
+        // Calculate trade profit/loss
+        if (quantity > 0 && sellPrice > 0) {
+          final profitPerShare = sellPrice - holding.averageBuyPrice;
+          final totalProfit = profitPerShare * quantity;
+          final profitPercent = holding.averageBuyPrice > 0 
+              ? (profitPerShare / holding.averageBuyPrice) * 100 
+              : 0.0;
+          
+          final isProfit = totalProfit >= 0;
+          
+          profitLossSection = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Divider(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Avg. Buy Price:'),
+                  Text('Rs. ${formatter.format(holding.averageBuyPrice)}'),
+                ],
+              ),
+              SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Profit/Loss:'),
+                  Text(
+                    '${isProfit ? '+' : ''}Rs. ${formatter.format(totalProfit)}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isProfit ? Colors.green[700] : Colors.red[700],
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Return:'),
+                  Text(
+                    '${isProfit ? '+' : ''}${profitPercent.toStringAsFixed(2)}%',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isProfit ? Colors.green[700] : Colors.red[700],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        }
+      } catch (e) {
+        print('Error calculating sell profit: $e');
+      }
+    }
+    
     return Card(
       elevation: 2,
       margin: EdgeInsets.only(top: 16, bottom: 16),
@@ -370,6 +440,9 @@ class _PaperTradeExecutionScreenState extends State<PaperTradeExecutionScreen> {
                 ),
               ],
             ),
+            
+            // Add profit/loss section for sell orders
+            if (profitLossSection != null) profitLossSection,
             
             // Show warning if insufficient funds
             if (isInsufficientFunds)
